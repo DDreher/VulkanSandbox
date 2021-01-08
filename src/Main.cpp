@@ -49,6 +49,11 @@ private:
 
     void CreateVulkanInstance()
     {
+        if(enable_validation_layers_ && CheckValidationLayerSupport() == false)
+        {
+            throw std::runtime_error("Required extension not supported!");
+        }
+
         // This is optional, but may provide crucial information to the graphics driver to optimize the application.
         // E.g. we could provide information about our well-known engine (Unity, Unreal,...) which the driver knows about.
         VkApplicationInfo app_info{};
@@ -102,7 +107,17 @@ private:
         create_info.pApplicationInfo = &app_info;
         create_info.enabledExtensionCount = glfw_extension_count; // Tell the driver which global extensions are used.
         create_info.ppEnabledExtensionNames = glfw_extensions;    // Global extensions are extensions which are applied to the entire program instead of a specific device.
-        create_info.enabledLayerCount = 0; // Tell the driver which global validation layers to enable
+
+        // Tell the driver which global validation layers to enable
+        if (enable_validation_layers_)
+        {
+            create_info.enabledLayerCount = static_cast<uint32_t>(valiation_layers_.size());
+            create_info.ppEnabledLayerNames = valiation_layers_.data();
+        }
+        else
+        {
+            create_info.enabledLayerCount = 0;
+        }
 
         if(vkCreateInstance(&create_info, nullptr, &vulkan_instance_) != VK_SUCCESS)
         {
@@ -110,11 +125,49 @@ private:
         }
     }
 
+    bool CheckValidationLayerSupport()
+    {
+        uint32_t layer_count;
+        vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
+
+        std::vector<VkLayerProperties> available_layers(layer_count);
+        vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
+
+        for (const char* layer_name : valiation_layers_)
+        {
+            bool layer_found = false;
+
+            for (const auto& layer_properties : available_layers)
+            {
+                if (strcmp(layer_name, layer_properties.layerName) == 0)
+                {
+                    layer_found = true;
+                    break;
+                }
+            }
+
+            if (layer_found == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     GLFWwindow* window_ = nullptr;
     const uint32_t SCREEN_WIDTH = 800;
     const uint32_t SCREEN_HEIGHT = 600;
 
     VkInstance vulkan_instance_ = nullptr;
+
+    const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
+#ifdef NDEBUG
+    const bool enable_validation_layers_ = false;
+#else
+    const bool enable_validation_layers_ = true;
+#endif
+
 };
 
 int main()
