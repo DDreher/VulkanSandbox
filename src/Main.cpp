@@ -103,6 +103,23 @@ private:
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
 
+        // Tell the driver which global validation layers to enable
+        VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info;
+        if (enable_validation_layers_)
+        {
+            create_info.enabledLayerCount = static_cast<uint32_t>(valiation_layers_.size());
+            create_info.ppEnabledLayerNames = valiation_layers_.data();
+
+            // Create an additional debug messenger which will automatically be used during vkCreateInstance and vkDestroyInstance and cleaned up after that.
+            PopulateDebugMessengerCreateInfo(debug_messenger_create_info);
+            create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debug_messenger_create_info;
+        }
+        else
+        {
+            create_info.enabledLayerCount = 0;
+            create_info.pNext = nullptr;
+        }
+
         // Tell the driver which global extensions are used.
         // Global extensions are extensions which are applied to the entire program instead of a specific device.
         std::vector<const char*> extensions = GetRequiredExtensions();
@@ -114,17 +131,6 @@ private:
         else
         {
             throw std::runtime_error("Required extension not supported!");
-        }
-
-        // Tell the driver which global validation layers to enable
-        if (enable_validation_layers_)
-        {
-            create_info.enabledLayerCount = static_cast<uint32_t>(valiation_layers_.size());
-            create_info.ppEnabledLayerNames = valiation_layers_.data();
-        }
-        else
-        {
-            create_info.enabledLayerCount = 0;
         }
 
         if(vkCreateInstance(&create_info, nullptr, &vulkan_instance_) != VK_SUCCESS)
@@ -214,17 +220,22 @@ private:
         return true;
     }
 
+    void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info)
+    {
+        create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        create_info.pfnUserCallback = DebugCallback;
+    }
+
     void SetupDebugManager()
     {
         // Tell Vulkan about our debug callback function in case we use a validation layer.
         if (enable_validation_layers_)
         {
             VkDebugUtilsMessengerCreateInfoEXT create_info{};
-            create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-            create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-            create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-            create_info.pfnUserCallback = DebugCallback;
-            create_info.pUserData = nullptr; // Optional. Allows us to pass custom data to the debug callback.
+            PopulateDebugMessengerCreateInfo(create_info);
 
             if (CreateDebugUtilsMessengerEXT(vulkan_instance_, &create_info, nullptr, &vulkan_debug_messenger_) != VK_SUCCESS)
             {
