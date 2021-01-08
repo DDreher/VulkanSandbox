@@ -64,49 +64,22 @@ private:
         app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
         app_info.apiVersion = VK_API_VERSION_1_0;
 
-        // Check which Vulkan extensions are supported
-        uint32_t extension_count = 0;
-        vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
-        std::vector<VkExtensionProperties> extensions(extension_count);
-        vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, extensions.data());
-
-        // Ensure that all the extensions required by glfw are supported
-        std::cout << "Available Vulkan extensions:\n";
-        for (const auto& extension : extensions)
-        {
-            std::cout << '\t' << extension.extensionName << '\n';
-        }
-        uint32_t glfw_extension_count = 0;
-        const char** glfw_extensions;
-        glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-
-        const char* string = *glfw_extensions;
-
-        for(size_t i=0; i<glfw_extension_count; ++i)
-        {
-            const char* glfw_ext = glfw_extensions[i];
-
-            bool found_extension = false;
-            for(const auto& ext : extensions)
-            {
-                found_extension = strcmp(glfw_ext, ext.extensionName) == 0;
-                if(found_extension)
-                {
-                    break;
-                }
-            }
-
-            if (found_extension == false)
-            {
-                throw std::runtime_error("Required extension not supported!");
-            }
-        }
-
         VkInstanceCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
         create_info.pApplicationInfo = &app_info;
-        create_info.enabledExtensionCount = glfw_extension_count; // Tell the driver which global extensions are used.
-        create_info.ppEnabledExtensionNames = glfw_extensions;    // Global extensions are extensions which are applied to the entire program instead of a specific device.
+
+        // Tell the driver which global extensions are used.
+        // Global extensions are extensions which are applied to the entire program instead of a specific device.
+        std::vector<const char*> extensions = GetRequiredExtensions();
+        if(CheckExtensionSupport(extensions))
+        {
+            create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+            create_info.ppEnabledExtensionNames = extensions.data();
+        }
+        else
+        {
+            throw std::runtime_error("Required extension not supported!");
+        }
 
         // Tell the driver which global validation layers to enable
         if (enable_validation_layers_)
@@ -123,6 +96,57 @@ private:
         {
             throw std::runtime_error("Failed to create Vulkan instance!");
         }
+    }
+
+    std::vector<const char*> GetRequiredExtensions()
+    {
+        uint32_t glfw_extension_count;
+        const char** glfw_extensions;
+        glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
+        std::vector<const char*> extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
+
+        if (enable_validation_layers_)
+        {
+            extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+        }
+
+        return extensions;
+    }
+
+    bool CheckExtensionSupport(const std::vector<const char*>& required_extensions)
+    {
+        uint32_t supported_extensions_count = 0;
+        vkEnumerateInstanceExtensionProperties(nullptr, &supported_extensions_count, nullptr);
+        std::vector<VkExtensionProperties> supported_extension_properties(supported_extensions_count);
+        vkEnumerateInstanceExtensionProperties(nullptr, &supported_extensions_count, supported_extension_properties.data());
+
+#ifndef NDEBUG
+        std::cout << "Available Vulkan extensions:\n";
+        for (const auto& extension_properties : supported_extension_properties)
+        {
+            std::cout << '\t' << extension_properties.extensionName << '\n';
+        }
+#endif
+
+        for(const char* required_ext : required_extensions)
+        {
+            bool found_extension = false;
+            for (const auto& supported_ext_property : supported_extension_properties)
+            {
+                found_extension = strcmp(required_ext, supported_ext_property.extensionName) == 0;
+                if (found_extension)
+                {
+                    break;
+                }
+            }
+
+            if (found_extension == false)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     bool CheckValidationLayerSupport()
