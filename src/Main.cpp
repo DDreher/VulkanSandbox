@@ -6,6 +6,35 @@
 #include <cstdlib>
 #include <vector>
 
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator,
+    VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+    // This is a proxy function encapsulating the creation process of a Vulkan debug utils messenger used to see validation layer outputs.
+    // In order to create the messenger we have to call vkCreateDebugUtilsMessengerEXT, which is an extension function 
+    // => We have to look up the address of this function ourselves.
+    auto func = (PFN_vkCreateDebugUtilsMessengerEXT) vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+    if (func != nullptr)
+    {
+        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    }
+    else
+    {
+        // Function couldn't be loaded
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+}
+
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger, const VkAllocationCallbacks* allocator)
+{
+    // The VkDebugUtilsMessengerEXT object also needs to be cleaned up with a call to vkDestroyDebugUtilsMessengerEXT. 
+    // Similarly to vkCreateDebugUtilsMessengerEXT the function needs to be explicitly loaded.
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if (func != nullptr)
+    {
+        func(instance, debug_messenger, allocator);
+    }
+}
+
 class HelloTriangleApplication
 {
 public:
@@ -29,6 +58,7 @@ private:
     void InitVulkan()
     {
         CreateVulkanInstance();
+        SetupDebugManager();
     }
 
     void MainLoop()
@@ -41,6 +71,11 @@ private:
 
     void Cleanup()
     {
+        if(enable_validation_layers_)
+        {
+            DestroyDebugUtilsMessengerEXT(vulkan_instance_, vulkan_debug_messenger_, nullptr);
+        }
+
         vkDestroyInstance(vulkan_instance_, nullptr);
 
         glfwDestroyWindow(window_);
@@ -179,11 +214,41 @@ private:
         return true;
     }
 
+    void SetupDebugManager()
+    {
+        // Tell Vulkan about our debug callback function in case we use a validation layer.
+        if (enable_validation_layers_)
+        {
+            VkDebugUtilsMessengerCreateInfoEXT create_info{};
+            create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+            create_info.pfnUserCallback = DebugCallback;
+            create_info.pUserData = nullptr; // Optional. Allows us to pass custom data to the debug callback.
+
+            if (CreateDebugUtilsMessengerEXT(vulkan_instance_, &create_info, nullptr, &vulkan_debug_messenger_) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to set up debug messenger!");
+            }
+        }
+    }
+
+    static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
+        const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
+    {
+        std::cerr << "Validation layer: " << callback_data->pMessage << std::endl;
+
+        // Return value indicates if the Vulkan call that triggered the validation layer message should be aborted with VK_ERROR_VALIDATION_FAILED_EXT.
+        // Usually this is only used to test validation layers. -> We should most likely always return VK_FALSE here.
+        return VK_FALSE; 
+    }
+
     GLFWwindow* window_ = nullptr;
     const uint32_t SCREEN_WIDTH = 800;
     const uint32_t SCREEN_HEIGHT = 600;
 
     VkInstance vulkan_instance_ = nullptr;
+    VkDebugUtilsMessengerEXT vulkan_debug_messenger_ = nullptr;
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
