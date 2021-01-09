@@ -325,6 +325,8 @@ private:
         {
             throw std::runtime_error("Failed to create logical device!");
         }
+
+        vkGetDeviceQueue(device, indices.graphics_family.value(), 0, &graphics_queue_);
     }
 
     bool CheckValidationLayerSupport()
