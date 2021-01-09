@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <vector>
+#include <optional>
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator,
     VkDebugUtilsMessengerEXT* pDebugMessenger)
@@ -35,6 +36,16 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
     }
 }
 
+struct QueueFamilyIndices
+{
+    std::optional<uint32_t> graphics_family; // Every value could be potentially valid, so we have to rely on optional.
+
+    bool HasFoundQueueFamily()
+    {
+        return graphics_family.has_value();
+    }
+};
+
 class HelloTriangleApplication
 {
 public:
@@ -59,6 +70,81 @@ private:
     {
         CreateVulkanInstance();
         SetupDebugManager();
+    }
+
+    void SelectPhysicalDevice()
+    {
+        uint32_t device_count = 0;
+        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, nullptr);
+
+        if (device_count == 0)
+        {
+            throw std::runtime_error("Failed to find GPUs with Vulkan support!");
+        }
+
+        std::vector<VkPhysicalDevice> found_devices(device_count);
+        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, found_devices.data());
+
+        for (const auto& device : found_devices)
+        {
+            if (CheckDeviceRequirements(device))
+            {
+                vulkan_physical_device_ = device;
+                break;
+            }
+        }
+
+        if (vulkan_physical_device_ == VK_NULL_HANDLE)
+        {
+            throw std::runtime_error("Failed to find a GPU that meets requirements!");
+        }
+    }
+
+    bool CheckDeviceRequirements(VkPhysicalDevice device)
+    {
+        // Query basic details, e.g. name, type and supported Vulkan version
+        //VkPhysicalDeviceProperties device_properties;
+        //vkGetPhysicalDeviceProperties(device, &device_properties);
+
+        // Query optional features, e.g. texture compression, 64 bit floats and multi viewport rendering (useful for VR) 
+        //VkPhysicalDeviceFeatures device_features;
+        //vkGetPhysicalDeviceFeatures(device, &device_features);
+
+        // We could check here for more stuff, like the support of geometry shaders, device memory, queue families,...
+        // Also, in case of multiple GPUs we could give each physical device a rating and pick the one that fits our needs best, e.g. integrated GPU vs dedicated GPU
+
+        QueueFamilyIndices indices = FindQueueFamilies(vulkan_physical_device_);
+        return indices.HasFoundQueueFamily();
+    }
+
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+    {
+        QueueFamilyIndices indices;
+
+        // VkQueueFamilyProperties contains details about the queue family, including the type of operations that are supported and the number of queues that can be created based on that family
+        uint32_t queue_family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+
+        // We need to find at least one queue family that supports VK_QUEUE_GRAPHICS_BIT.
+        int i = 0;
+        for (const auto& queue_family : queue_families)
+        {
+            if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                indices.graphics_family = i;
+            }
+
+            if(indices.HasFoundQueueFamily())
+            {
+                break;
+            }
+
+            i++;
+        }
+
+        return indices;
     }
 
     void MainLoop()
@@ -258,8 +344,9 @@ private:
     const uint32_t SCREEN_WIDTH = 800;
     const uint32_t SCREEN_HEIGHT = 600;
 
-    VkInstance vulkan_instance_ = nullptr;
-    VkDebugUtilsMessengerEXT vulkan_debug_messenger_ = nullptr;
+    VkInstance vulkan_instance_ = VK_NULL_HANDLE;  // The connection between the application and the Vulkan library
+    VkDebugUtilsMessengerEXT vulkan_debug_messenger_ = VK_NULL_HANDLE;
+    VkPhysicalDevice vulkan_physical_device_ = VK_NULL_HANDLE;
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
