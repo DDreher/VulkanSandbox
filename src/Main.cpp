@@ -70,81 +70,8 @@ private:
     {
         CreateVulkanInstance();
         SetupDebugManager();
-    }
-
-    void SelectPhysicalDevice()
-    {
-        uint32_t device_count = 0;
-        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, nullptr);
-
-        if (device_count == 0)
-        {
-            throw std::runtime_error("Failed to find GPUs with Vulkan support!");
-        }
-
-        std::vector<VkPhysicalDevice> found_devices(device_count);
-        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, found_devices.data());
-
-        for (const auto& device : found_devices)
-        {
-            if (CheckDeviceRequirements(device))
-            {
-                vulkan_physical_device_ = device;
-                break;
-            }
-        }
-
-        if (vulkan_physical_device_ == VK_NULL_HANDLE)
-        {
-            throw std::runtime_error("Failed to find a GPU that meets requirements!");
-        }
-    }
-
-    bool CheckDeviceRequirements(VkPhysicalDevice device)
-    {
-        // Query basic details, e.g. name, type and supported Vulkan version
-        //VkPhysicalDeviceProperties device_properties;
-        //vkGetPhysicalDeviceProperties(device, &device_properties);
-
-        // Query optional features, e.g. texture compression, 64 bit floats and multi viewport rendering (useful for VR) 
-        //VkPhysicalDeviceFeatures device_features;
-        //vkGetPhysicalDeviceFeatures(device, &device_features);
-
-        // We could check here for more stuff, like the support of geometry shaders, device memory, queue families,...
-        // Also, in case of multiple GPUs we could give each physical device a rating and pick the one that fits our needs best, e.g. integrated GPU vs dedicated GPU
-
-        QueueFamilyIndices indices = FindQueueFamilies(vulkan_physical_device_);
-        return indices.HasFoundQueueFamily();
-    }
-
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
-    {
-        QueueFamilyIndices indices;
-
-        // VkQueueFamilyProperties contains details about the queue family, including the type of operations that are supported and the number of queues that can be created based on that family
-        uint32_t queue_family_count = 0;
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
-        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
-        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
-
-        // We need to find at least one queue family that supports VK_QUEUE_GRAPHICS_BIT.
-        int i = 0;
-        for (const auto& queue_family : queue_families)
-        {
-            if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-            {
-                indices.graphics_family = i;
-            }
-
-            if(indices.HasFoundQueueFamily())
-            {
-                break;
-            }
-
-            i++;
-        }
-
-        return indices;
+        SelectPhysicalDevice();
+        CreateLogicalDevice();
     }
 
     void MainLoop()
@@ -157,6 +84,8 @@ private:
 
     void Cleanup()
     {
+        vkDestroyDevice(vulkan_logical_device_, nullptr);
+
         if(enable_validation_layers_)
         {
             DestroyDebugUtilsMessengerEXT(vulkan_instance_, vulkan_debug_messenger_, nullptr);
@@ -276,6 +205,128 @@ private:
         return true;
     }
 
+    void SelectPhysicalDevice()
+    {
+        uint32_t device_count = 0;
+        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, nullptr);
+
+        if (device_count == 0)
+        {
+            throw std::runtime_error("Failed to find GPUs with Vulkan support!");
+        }
+
+        std::vector<VkPhysicalDevice> found_devices(device_count);
+        vkEnumeratePhysicalDevices(vulkan_instance_, &device_count, found_devices.data());
+
+        for (const auto& device : found_devices)
+        {
+            if (CheckDeviceRequirements(device))
+            {
+                vulkan_physical_device_ = device;
+                break;
+            }
+        }
+
+        if (vulkan_physical_device_ == VK_NULL_HANDLE)
+        {
+            throw std::runtime_error("Failed to find a GPU that meets requirements!");
+        }
+    }
+
+    bool CheckDeviceRequirements(VkPhysicalDevice device)
+    {
+        // Query basic details, e.g. name, type and supported Vulkan version
+        //VkPhysicalDeviceProperties device_properties;
+        //vkGetPhysicalDeviceProperties(device, &device_properties);
+
+        // Query optional features, e.g. texture compression, 64 bit floats and multi viewport rendering (useful for VR) 
+        //VkPhysicalDeviceFeatures device_features;
+        //vkGetPhysicalDeviceFeatures(device, &device_features);
+
+        // We could check here for more stuff, like the support of geometry shaders, device memory, queue families,...
+        // Also, in case of multiple GPUs we could give each physical device a rating and pick the one that fits our needs best, e.g. integrated GPU vs dedicated GPU
+
+        QueueFamilyIndices indices = FindQueueFamilies(device);
+        return indices.HasFoundQueueFamily();
+    }
+
+    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+    {
+        QueueFamilyIndices indices;
+
+        // VkQueueFamilyProperties contains details about the queue family, including the type of operations that are supported and the number of queues that can be created based on that family
+        uint32_t queue_family_count = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+        std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+
+        // We need to find at least one queue family that supports VK_QUEUE_GRAPHICS_BIT.
+        int i = 0;
+        for (const auto& queue_family : queue_families)
+        {
+            if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+            {
+                indices.graphics_family = i;
+            }
+
+            if (indices.HasFoundQueueFamily())
+            {
+                break;
+            }
+
+            i++;
+        }
+
+        return indices;
+    }
+
+    void CreateLogicalDevice()
+    {
+        QueueFamilyIndices indices = FindQueueFamilies(vulkan_physical_device_);
+
+        // Specify queues to be created
+        VkDeviceQueueCreateInfo queue_create_info{};
+        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_create_info.queueFamilyIndex = indices.graphics_family.value();
+        queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple thread and submit them all at once.
+        float queue_priority = 1.0f;
+        queue_create_info.pQueuePriorities = &queue_priority; // Queue priorities [0.0f, 1.0f] influence the scheduling of command buffer execution. Required even for 1 queue!
+
+        // Specify used device features
+        // (We can query them with vkGetPhysicalDeviceFeatures, e.g. geometry shaders)
+        VkPhysicalDeviceFeatures device_features{};
+
+        // Create logical device
+        VkDeviceCreateInfo create_info{};
+        create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        create_info.pQueueCreateInfos = &queue_create_info;
+        create_info.queueCreateInfoCount = 1;
+        create_info.pEnabledFeatures = &device_features;
+
+        // specify device specific extensions
+        // For example VK_KHR_swapchain allows the presentation of rendered images from the device to the OS.
+        // It could be the case that we use a GPU without this feature, for example if we only rely on compute operations.
+        create_info.enabledExtensionCount = 0;  // For now we don't need any device specific extensions.
+
+        // Specify device specific validation layers
+        // Previous implementations of Vulkan made a distinction between instance and device specific validation layers, but this is no longer the case
+        // It is still good practice to set the values to be compatible with older implementations.
+        if (enable_validation_layers_)
+        {
+            create_info.enabledLayerCount = static_cast<uint32_t>(valiation_layers_.size());
+            create_info.ppEnabledLayerNames = valiation_layers_.data();
+        }
+        else
+        {
+            create_info.enabledLayerCount = 0;
+        }
+
+        if (vkCreateDevice(vulkan_physical_device_, &create_info, nullptr, &vulkan_logical_device_) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create logical device!");
+        }
+    }
+
     bool CheckValidationLayerSupport()
     {
         uint32_t layer_count;
@@ -346,7 +397,9 @@ private:
 
     VkInstance vulkan_instance_ = VK_NULL_HANDLE;  // The connection between the application and the Vulkan library
     VkDebugUtilsMessengerEXT vulkan_debug_messenger_ = VK_NULL_HANDLE;
-    VkPhysicalDevice vulkan_physical_device_ = VK_NULL_HANDLE;
+    VkPhysicalDevice vulkan_physical_device_ = VK_NULL_HANDLE;  // We do not have to clean this up manually
+    VkDevice vulkan_logical_device_ = VK_NULL_HANDLE;
+    VkQueue graphics_queue_ = VK_NULL_HANDLE;   // We do not have to clean this up manually, clean up of logical device takes care of this.
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
