@@ -85,6 +85,7 @@ private:
         SelectPhysicalDevice();
         CreateLogicalDevice();
         CreateSwapChain();
+        CreateImageViews();
     }
 
     void CreateSurface()
@@ -109,6 +110,11 @@ private:
     void Cleanup()
     {
         // Clean up Vulkan
+        for (auto image_view : swap_chain_image_views_)
+        {
+            vkDestroyImageView(logical_device_, image_view, nullptr);
+        }
+
         vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
         vkDestroyDevice(logical_device_, nullptr);
 
@@ -593,6 +599,44 @@ private:
         }
     }
 
+    void CreateImageViews()
+    {
+        // To use any VkImage (e.g. those in the swap chain) in the render pipeline we have to create a VkImageView object.
+        // An image view describes how to access the image and which part of the image to access, e.g. if it should be treated as a 2D texture depth texture without any mipmapping levels.
+
+        swap_chain_image_views_.resize(swap_chain_images_.size());
+
+        for (size_t i = 0; i < swap_chain_images_.size(); ++i)
+        {
+            VkImageViewCreateInfo create_info{};
+            create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            create_info.image = swap_chain_images_[i];
+            create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;   // Allows us to treat images as 1D textures, 2D textures, 3D textures and cube maps
+            create_info.format = swap_chain_image_format_;
+
+            // components allow us to swizzle color channels, e.g. we could map all of the color channels to the red channel for a monochrome texture, or fill a channel with 0s or 1s.
+            create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;   // IDENTITY is the default mapping.
+            create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+            // The subresourceRange field describes what the image's purpose is and which part of the image should be accessed.
+            // Our images will be used as color targets without any mipmapping levels or multiple layers.
+            // In case of stereographic 3D applications, we could create a swap chain with multiple layers.
+            // We could then create multiple image views for each image representing the views for the left and right eyes by accessing different layers.
+            create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            create_info.subresourceRange.baseMipLevel = 0;
+            create_info.subresourceRange.levelCount = 1;
+            create_info.subresourceRange.baseArrayLayer = 0;
+            create_info.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(logical_device_, &create_info, nullptr, &swap_chain_image_views_[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to create image views!");
+            }
+        }
+    }
+
     bool CheckValidationLayerSupport()
     {
         uint32_t layer_count;
@@ -672,6 +716,7 @@ private:
     std::vector<VkImage> swap_chain_images_; // image handles will be automatically cleaned up by destruction of swap chain.
     VkFormat swap_chain_image_format_;
     VkExtent2D swap_chain_extent_;
+    std::vector<VkImageView> swap_chain_image_views_;   // Will be explicitely created by us -> We have to clean them up!
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
