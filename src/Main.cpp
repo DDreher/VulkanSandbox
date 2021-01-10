@@ -453,7 +453,7 @@ private:
         VkPresentModeKHR present_mode = ChooseSwapPresentMode(swap_chain_support.present_modes);
         VkExtent2D extent = ChooseSwapExtent(swap_chain_support.capabilities);
 
-        // Specify num images we would like to have in the swap chain
+        // Specify the minimum num images we would like to have in the swap chain
         uint32_t image_count = swap_chain_support.capabilities.minImageCount + 1;   // Minimum + 1 is recommended to avoid GPU stalls.
 
         // Ensure we don't exceed the supported max image count in the swap chain. 
@@ -468,8 +468,10 @@ private:
         create_info.surface = surface_; // Swap chain is tied to this surface
         create_info.minImageCount = image_count;
         create_info.imageFormat = surface_format.format;
+        swap_chain_image_format_ = surface_format.format;   // Save for later use...
         create_info.imageColorSpace = surface_format.colorSpace;
         create_info.imageExtent = extent;
+        swap_chain_extent_ = extent;    // Save for later use...
         create_info.imageArrayLayers = 1;   // Amount of layers each image consists of. 1 unless developing a stereoscopic 3D application.
         create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;   // What kind of operations images in the swap chain are used for. We'll render directly to them -> Color attachment.
                                                                         // We could also first render to a separate image and then do some post-processing operations.
@@ -519,6 +521,11 @@ private:
         {
             throw std::runtime_error("Failed to create swap chain!");
         }
+
+        // Retrieve image handles of swap chain.
+        vkGetSwapchainImagesKHR(logical_device_, swap_chain_, &image_count, nullptr);
+        swap_chain_images_.resize(image_count); // We only specified the minimum num of images, so the swap chain could potentially contain more -> We have to resize!
+        vkGetSwapchainImagesKHR(logical_device_, swap_chain_, &image_count, swap_chain_images_.data());
     }
 
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats)
@@ -662,6 +669,9 @@ private:
     VkQueue present_queue_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     VkSwapchainKHR swap_chain_ = VK_NULL_HANDLE;
+    std::vector<VkImage> swap_chain_images_; // image handles will be automatically cleaned up by destruction of swap chain.
+    VkFormat swap_chain_image_format_;
+    VkExtent2D swap_chain_extent_;
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
