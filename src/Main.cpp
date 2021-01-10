@@ -143,6 +143,8 @@ private:
 
     void Cleanup()
     {
+        vkDestroyPipeline(logical_device_, graphics_pipeline_, nullptr);
+
         vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
 
         vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
@@ -938,30 +940,31 @@ private:
         color_blend_attachment_info.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
         color_blend_attachment_info.alphaBlendOp = VK_BLEND_OP_ADD;
 
-        VkPipelineColorBlendStateCreateInfo colorBlending{};    // Global color blending settings
-        colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        colorBlending.logicOpEnable = VK_FALSE;
-        colorBlending.logicOp = VK_LOGIC_OP_COPY; // Optional
-        colorBlending.attachmentCount = 1;
-        colorBlending.pAttachments = &color_blend_attachment_info;
-        colorBlending.blendConstants[0] = 0.0f; // Optional
-        colorBlending.blendConstants[1] = 0.0f; // Optional
-        colorBlending.blendConstants[2] = 0.0f; // Optional
-        colorBlending.blendConstants[3] = 0.0f; // Optional
+        VkPipelineColorBlendStateCreateInfo color_blending_info{};    // Global color blending settings
+        color_blending_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blending_info.logicOpEnable = VK_FALSE;
+        color_blending_info.logicOp = VK_LOGIC_OP_COPY; // Optional
+        color_blending_info.attachmentCount = 1;
+        color_blending_info.pAttachments = &color_blend_attachment_info;
+        color_blending_info.blendConstants[0] = 0.0f; // Optional
+        color_blending_info.blendConstants[1] = 0.0f; // Optional
+        color_blending_info.blendConstants[2] = 0.0f; // Optional
+        color_blending_info.blendConstants[3] = 0.0f; // Optional
 
         // Dynamic state - stuff that can actually be changed without recreating the pipeline
         // e.g. size of the viewport, line width and blend constants.
         // Specifying this will cause the configuration of these values to be ignored and we will be required to specify the data at drawing time.
         // Can be nullptr if we don't use dynamic states.
-        VkDynamicState dynamic_states[] = {
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_LINE_WIDTH
-        };
+         
+        //VkDynamicState dynamic_states[] = {
+        //    VK_DYNAMIC_STATE_VIEWPORT,
+        //    VK_DYNAMIC_STATE_LINE_WIDTH
+        //};
 
-        VkPipelineDynamicStateCreateInfo dynamic_state_info{};
-        dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamic_state_info.dynamicStateCount = 2;
-        dynamic_state_info.pDynamicStates = dynamic_states;
+        //VkPipelineDynamicStateCreateInfo dynamic_state_info{};
+        //dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        //dynamic_state_info.dynamicStateCount = 2;
+        //dynamic_state_info.pDynamicStates = dynamic_states;
 
         // Pipeline layout - Describes the usage of uniforms.
         // Uniform values are globals similar to dynamic state variables that can be changed at drawing time to alter the behavior of your shaders without having to recreate them.
@@ -978,6 +981,35 @@ private:
         if (vkCreatePipelineLayout(logical_device_, &pipeline_layout_info, nullptr, &pipeline_layout_) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create pipeline layout!");
+        }
+
+        VkGraphicsPipelineCreateInfo pipeline_create_info{};
+        pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        pipeline_create_info.stageCount = 2;
+        pipeline_create_info.pStages = shader_stages;
+        pipeline_create_info.pVertexInputState = &vertex_input_info;
+        pipeline_create_info.pInputAssemblyState = &input_assembly_info;
+        pipeline_create_info.pViewportState = &viewport_state_info;
+        pipeline_create_info.pRasterizationState = &rasterizer_info;
+        pipeline_create_info.pMultisampleState = &multisampling_info;
+        pipeline_create_info.pDepthStencilState = nullptr; // Optional
+        pipeline_create_info.pColorBlendState = &color_blending_info;
+        pipeline_create_info.pDynamicState = nullptr; // Optional
+        pipeline_create_info.layout = pipeline_layout_;
+        pipeline_create_info.renderPass = render_pass_;
+        pipeline_create_info.subpass = 0;   // index of the sub pass where this graphics pipeline will be used
+        pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;   // Optional. Vulkan allows creation of a new graphics pipeline by deriving from an existing pipeline
+                                                                    // Deriving is less expensive to set up when pipelines have lots of functionality in common and switching between pipelines
+                                                                    // from the same parent can be done quicker.
+        pipeline_create_info.basePipelineIndex = -1; // Optional
+
+        // Time to create the graphics pipeline!
+        uint32_t create_info_count = 1; // We could create multiple render pipelines at once.
+        VkPipelineCache pipeline_cache = VK_NULL_HANDLE;    // can be used to store and reuse data relevant to pipeline creation across multiple calls to vkCreateGraphicsPipelines
+                                                            // and even across program executions if the cache is stored to a file. 
+        if (vkCreateGraphicsPipelines(logical_device_, pipeline_cache, create_info_count, &pipeline_create_info, nullptr, &graphics_pipeline_) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create graphics pipeline!");
         }
 
         // Finally clean up the shader modules
@@ -1030,6 +1062,7 @@ private:
     std::vector<VkImageView> swap_chain_image_views_;   // Will be explicitely created by us -> We have to clean them up!
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+    VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
 };
 
 int main()
