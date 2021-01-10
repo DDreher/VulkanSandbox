@@ -79,12 +79,28 @@ private:
 
     void InitVulkan()
     {
+        // The instance is the connection between the application and the Vulkan library. We also tell the driver some more information, e.g. what validation layers or extensions we need.
         CreateVulkanInstance();
-        SetupDebugManager();
-        CreateSurface(); // Have to create surface before we select the physical device to ensure that the device meets our requirements.
+
+        // Register our debug callback for validation layers.
+        SetupDebugManager();    
+
+        // A surface represents an abstract type to present rendered images to. The surface in our program will be backed by the window that we've already opened with GLFW.
+        // We have to create surface before we select the physical device to ensure that the device meets our requirements.
+        CreateSurface(); 
+
+        // Get handle to the physical GPU which meets our requirements.
         SelectPhysicalDevice();
+
+        // Set up a logical device to interface with the physical device.
+        // Here we specify which features are required, check which queue families are available and retrieve corresponding queue handles.
         CreateLogicalDevice();
+
+        // Set up infrastructure that will own the frame buffers we render to before transferring them to the screen.
+        // Essentially this is a queue of images waiting to be shown on the display. 
         CreateSwapChain();
+
+        // We have to manually retrieve the handles to the images in the swap chain.
         CreateImageViews();
     }
 
