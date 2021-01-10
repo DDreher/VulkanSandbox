@@ -104,17 +104,6 @@ private:
         CreateImageViews();
     }
 
-    void CreateSurface()
-    {
-        // glfw offers a handy abstraction for surface creation.
-        // It automatically fills a VkWin32SurfaceCreateInfoKHR struct with the platform specific window and process handles
-        // and then calls the platform specific function to create the surface, e.g. vkCreateWin32SurfaceKHR
-        if (glfwCreateWindowSurface(instance_, window_, nullptr, &surface_) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create window surface!");
-        }
-    }
-
     void MainLoop()
     {
         while (!glfwWindowShouldClose(window_))
@@ -255,6 +244,42 @@ private:
         }
 
         return true;
+    }
+
+    void SetupDebugManager()
+    {
+        // Tell Vulkan about our debug callback function in case we use a validation layer.
+        if (enable_validation_layers_)
+        {
+            VkDebugUtilsMessengerCreateInfoEXT create_info{};
+            PopulateDebugMessengerCreateInfo(create_info);
+
+            if (CreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to set up debug messenger!");
+            }
+        }
+    }
+
+    static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
+        const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
+    {
+        std::cerr << "Validation layer: " << callback_data->pMessage << std::endl;
+
+        // Return value indicates if the Vulkan call that triggered the validation layer message should be aborted with VK_ERROR_VALIDATION_FAILED_EXT.
+        // Usually this is only used to test validation layers. -> We should most likely always return VK_FALSE here.
+        return VK_FALSE;
+    }
+
+    void CreateSurface()
+    {
+        // glfw offers a handy abstraction for surface creation.
+        // It automatically fills a VkWin32SurfaceCreateInfoKHR struct with the platform specific window and process handles
+        // and then calls the platform specific function to create the surface, e.g. vkCreateWin32SurfaceKHR
+        if (glfwCreateWindowSurface(instance_, window_, nullptr, &surface_) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to create window surface!");
+        }
     }
 
     void SelectPhysicalDevice()
@@ -690,31 +715,6 @@ private:
         create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
         create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         create_info.pfnUserCallback = DebugCallback;
-    }
-
-    void SetupDebugManager()
-    {
-        // Tell Vulkan about our debug callback function in case we use a validation layer.
-        if (enable_validation_layers_)
-        {
-            VkDebugUtilsMessengerCreateInfoEXT create_info{};
-            PopulateDebugMessengerCreateInfo(create_info);
-
-            if (CreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS)
-            {
-                throw std::runtime_error("Failed to set up debug messenger!");
-            }
-        }
-    }
-
-    static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
-        const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
-    {
-        std::cerr << "Validation layer: " << callback_data->pMessage << std::endl;
-
-        // Return value indicates if the Vulkan call that triggered the validation layer message should be aborted with VK_ERROR_VALIDATION_FAILED_EXT.
-        // Usually this is only used to test validation layers. -> We should most likely always return VK_FALSE here.
-        return VK_FALSE; 
     }
 
     GLFWwindow* window_ = nullptr;
