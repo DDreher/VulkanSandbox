@@ -131,6 +131,21 @@ private:
 
         // Specify every single thing of the render pipeline stages...
         CreateGraphicsPipeline();
+
+        // The attachments specified during render pass creation are bound by wrapping them into a VkFramebuffer object
+        // A framebuffer object references all of the VkImageView objects that represent the attachments.
+        // However, the image that we have to use for the attachment depends on which image the swap chain returns when we retrieve one for presentation.
+        // That means that we have to create a framebuffer for all of the images in the swap chain and use the one that corresponds to the retrieved image at drawing time.
+        CreateFramebuffers();
+
+        // Drawing operations and memory transfers are stored in command buffers. These are retrieved from command pools.
+        // We can fill these buffers in multiple threads and then execute them all at once on the main thread.
+        CreateCommandPool();
+
+        // Create command buffers for each image in the swap chain.
+        CreateCommandBuffers();
+
+        CreateSemaphores();
     }
 
     void MainLoop()
@@ -138,11 +153,26 @@ private:
         while (!glfwWindowShouldClose(window_))
         {
             glfwPollEvents();
+            DrawFrame();
         }
+
+        // operations in drawFrame are asynchronous -> When we exit the loop there may still be some ongoing operations and we shouldn't destroy the resources until we are done using those.
+        // => Wait for the logical device to finish operations before exiting mainLoop and destroying the window.
+        vkDeviceWaitIdle(logical_device_);
     }
 
     void Cleanup()
     {
+        vkDestroySemaphore(logical_device_, render_finished_semaphore_, nullptr);
+        vkDestroySemaphore(logical_device_, image_available_semaphore_, nullptr);
+
+        vkDestroyCommandPool(logical_device_, command_pool_, nullptr);  // Also destroys any command buffers we retrieved from the pool
+
+        for (auto framebuffer : swap_chain_framebuffers_)
+        {
+            vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
+        }
+
         vkDestroyPipeline(logical_device_, graphics_pipeline_, nullptr);
 
         vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
@@ -788,6 +818,11 @@ private:
         // Grouping these rendering operations into one render pass, Vulkan is able to reorder the operations and conserve memory bandwidth for possibly better performance.
         
         // Every subpass references one or more of the attachments that we've described using the structure in the previous sections
+        // The following other types of attachments can be referenced by a subpass:
+        // pInputAttachments: Attachments that are read from a shader
+        // pResolveAttachments : Attachments used for multisampling color attachments
+        // pDepthStencilAttachment : Attachment for depthand stencil data
+        // pPreserveAttachments : Attachments that are not used by this subpass, but for which the data must be preserved
         VkAttachmentReference color_attachment_ref{};
         color_attachment_ref.attachment = 0;    // specifies which attachment to reference by its index in the attachment descriptions array of VkRenderPassCreateInfo
         color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // specifies which layout we would like the attachment to have during a subpass that uses this reference
@@ -798,11 +833,30 @@ private:
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
 
-        // The following other types of attachments can be referenced by a subpass:
-        // pInputAttachments: Attachments that are read from a shader
-        // pResolveAttachments : Attachments used for multisampling color attachments
-        // pDepthStencilAttachment : Attachment for depthand stencil data
-        // pPreserveAttachments : Attachments that are not used by this subpass, but for which the data must be preserved
+        // Subpass dependencies
+        // Subpasses in a render pass automatically take care of image layout transitions. 
+        // These transitions are controlled by subpass dependencies, which specify memory and execution dependencies between subpasses. 
+        // We have only a single subpass right now, but the operations right before and right after this subpass also count as implicit "subpasses".
+
+        // There are two built-in dependencies that take care of the transition at the start of the render pass and at the end of the render pass, 
+        // BUT: The start dependency assumes that the transition occurs at the start of the pipeline, but we haven't acquired the image yet at that point!
+        // => does not occur at the right time! 
+        // Solution 1: Change the waitStages for the imageAvailableSemaphore to VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT to ensure that the render passes don't begin until the image is available
+        // Solution 2: Make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage <- We do this here.
+
+        VkSubpassDependency dependency{};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;    // Dependency. special value VK_SUBPASS_EXTERNAL refers to the implicit subpass before or after the render pass 
+                                                        // depending on whether it is specified in srcSubpass or dstSubpass
+        dependency.dstSubpass = 0;  // Dependent subpass (we only have one here). dst Must always be higher than src to prevent cycles in dependency graph!
+
+        // Specify the operations to wait on and the stages in which these operations occur
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;    // We need to wait for the swap chain to finish reading from the image before we can access it
+                                                                                    // -> Wait on color attachment output stage itself
+        dependency.srcAccessMask = 0;
+
+        // Prevent the transition from happening until it's actually necessary (and allowed): when we want to start writing colors to it.
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;    // The operations that should wait on this are in the color attachment stage  
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;            // and involve the writing of the color attachment
 
         // Finally create the render pass
         VkRenderPassCreateInfo render_pass_info{};
@@ -811,12 +865,13 @@ private:
         render_pass_info.pAttachments = &color_attachment;
         render_pass_info.subpassCount = 1;
         render_pass_info.pSubpasses = &subpass;
+        render_pass_info.dependencyCount = 1;
+        render_pass_info.pDependencies = &dependency;
 
         if (vkCreateRenderPass(logical_device_, &render_pass_info, nullptr, &render_pass_) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create render pass!");
         }
-
     }
 
     void CreateGraphicsPipeline()
@@ -1033,6 +1088,202 @@ private:
         return shader_module;
     }
 
+    void CreateFramebuffers()
+    {
+        // Create frame buffer for each image view in our swap chain
+        swap_chain_framebuffers_.resize(swap_chain_image_views_.size());
+        for (size_t i=0; i < swap_chain_image_views_.size(); i++)
+        {
+            VkImageView attachments[] = {
+                swap_chain_image_views_[i]
+            };
+
+            VkFramebufferCreateInfo frambuffer_info{};
+            frambuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            frambuffer_info.renderPass = render_pass_;  // Framebuffer needs to be compatible with this render pass -> Use same number and types of attachments
+            frambuffer_info.attachmentCount = 1;    // Right now we only have one color attachment
+            frambuffer_info.pAttachments = attachments; // Specify the VkImageView objects that should be bound to the respective attachment descriptions in the render pass pAttachment array.
+            frambuffer_info.width = swap_chain_extent_.width;
+            frambuffer_info.height = swap_chain_extent_.height;
+            frambuffer_info.layers = 1; // swap chain images are single images -> 1 layer.
+
+            if (vkCreateFramebuffer(logical_device_, &frambuffer_info, nullptr, &swap_chain_framebuffers_[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to create framebuffer!");
+            }
+        }
+
+    }
+
+    void CreateCommandPool()
+    {
+
+        // Command buffers are executed by submitting them on one of the device queues, like the graphics and presentation queues we retrieved. 
+        // Each command pool can only allocate command buffers that are submitted on a single type of queue. 
+        QueueFamilyIndices queue_family_indices = FindQueueFamilies(physical_device_);
+        VkCommandPoolCreateInfo pool_info{};
+        pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        pool_info.queueFamilyIndex = queue_family_indices.graphics_family.value();   // We only use drawing commands, so we stick to the graphics queue family.
+        pool_info.flags = 0; // Optional.    VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
+                            //   VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
+                            // For now we will only fill the command buffer once at the beginning of the program, so we don't use on any of the flags.
+                           
+        if (vkCreateCommandPool(logical_device_, &pool_info, nullptr, &command_pool_) != VK_SUCCESS)
+        {
+            throw std::runtime_error("failed to create command pool!");
+        }
+    }
+
+    void CreateCommandBuffers()
+    {
+        // Because one of the drawing commands involves binding the right VkFramebuffer, we have to record a command buffer for every image in the swap chain.
+        command_buffers_.resize(swap_chain_framebuffers_.size());
+
+        VkCommandBufferAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.commandPool = command_pool_;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // specifies if the allocated command buffers are primary or secondary command buffers
+                                                            // VK_COMMAND_BUFFER_LEVEL_PRIMARY -> Can be submitted to a queue for execution, but cannot be called from other command buffers
+                                                            // VK_COMMAND_BUFFER_LEVEL_SECONDARY -> Cannot be submitted directly, but can be called from primary command buffers.
+        alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers_.size());
+
+        if (vkAllocateCommandBuffers(logical_device_, &alloc_info, command_buffers_.data()) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to allocate command buffers!");
+        }
+
+        // For now also record the command buffer since we want to show a static triangle
+        for (size_t i = 0; i < command_buffers_.size(); ++i)
+        {
+            VkCommandBufferBeginInfo begin_info{};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            begin_info.flags = 0; // Optional.  VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+                                  //            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
+                                  //            VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
+            begin_info.pInheritanceInfo = nullptr;  // Optional. Specifies which state to inherit from the calling primary command buffers.
+                                                    // Only relevant for secondary command buffers.
+
+            if (vkBeginCommandBuffer(command_buffers_[i], &begin_info) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to begin recording command buffer!");
+            }
+
+            VkRenderPassBeginInfo render_pass_info{};
+            render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            render_pass_info.renderPass = render_pass_;
+            render_pass_info.framebuffer = swap_chain_framebuffers_[i];
+            render_pass_info.renderArea.offset = { 0, 0 };
+            render_pass_info.renderArea.extent = swap_chain_extent_; // Pixels outside this region will have undefined values. It should match the size of the attachments for best performance.
+        
+            // define the clear values to use for VK_ATTACHMENT_LOAD_OP_CLEAR
+            VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
+            render_pass_info.clearValueCount = 1;
+            render_pass_info.pClearValues = &clear_color;
+
+            vkCmdBeginRenderPass(command_buffers_[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+            vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
+
+            // We've now told Vulkan which operations to execute in the graphics pipeline and which attachment to use in the fragment shader,
+            // so all that remains is telling it to draw the triangle...
+            uint32_t vertex_count = 3;  // We don't have the vertex buffer yet, but technically we still want to draw 3 vertices...
+            uint32_t instance_count = 1;    // We only render one instance
+            uint32_t first_vertex = 0;  // Offset into the vertex buffer
+            uint32_t first_instance = 0;    // offset for instanced rendering
+            vkCmdDraw(command_buffers_[i], vertex_count, instance_count, first_vertex , first_instance);
+
+            vkCmdEndRenderPass(command_buffers_[i]);
+
+            if (vkEndCommandBuffer(command_buffers_[i]) != VK_SUCCESS)
+            {
+                throw std::runtime_error("Failed to record command buffer!");
+            }
+        }
+    }
+
+    void DrawFrame()
+    {
+        // Drawing a frame involves these operations, which will be executed asynchronously with a single function call:
+        //  * Acquire an image from the swap chain
+        //  * Execute the command buffer with that image as attachment in the framebuffer
+        //  * Return the image to the swap chain for presentation
+        // Since this is async, the execution order is undefined. Yet the operations depend on each other => We have to synchronize.
+        
+        // Fences and semaphores are both objects that can be used for coordinating operations, e.g. by having one operation signal and another operation wait for a fence
+        // or semaphore to go from the unsignaled to signaled state.
+        // Fences can be accessed from the application (vkWaitForFences), semaphores can't.
+        // Fences are designed to synchronize the application itself with rendering operation
+        // Semaphores are used to sync operations within or across command queues.
+        // => We want to synchronize the queue operations of draw commands and presentation, which makes semaphores the best fit.
+    
+        uint32_t image_index;   // refers to the VkImage idx in our swap_chain_images_ array
+        vkAcquireNextImageKHR(logical_device_, swap_chain_, UINT64_MAX /*disable time out*/, image_available_semaphore_, VK_NULL_HANDLE, &image_index);
+
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore wait_semaphores[] = { image_available_semaphore_ };  // which semaphores to wait on before execution begins 
+        VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };  // in which stages of the pipeline to wait
+                                                                                                // We want to wait with writing colors to the image until it's available,
+                                                                                                // so we're specifying the stage of the graphics pipeline that writes to the color attachment
+                                                                                                // => Theoretically the implementation can already start executing our vertex shader etc
+                                                                                                // while the image is not yet available
+                                                                                                // Each entry in the array corresponds to the semaphore with the same index in pWaitSemaphores
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+
+        // Submit the command buffer that binds the swap chain image we just acquired as color attachment
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffers_[image_index];
+
+        // Specify which semaphores to signal once the command buffer(s) have finished execution
+        VkSemaphore signal_semaphores[] = { render_finished_semaphore_ };
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = signal_semaphores;
+
+        if (vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)  // Takes an array of VkSubmitInfo structs as argument for efficiency when the workload is much larger
+                                                                                            // Last paramter is optional fence that will be signaled when the command buffers finish execution
+        {
+            throw std::runtime_error("Failed to submit draw command buffer!");
+        }
+
+        // Finally submit result back to the swap chain to have it eventually show up on the screen 
+        VkPresentInfoKHR present_info{};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+        // Which semaphores to wait on before presentation can happen
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = signal_semaphores;
+
+        // Specify the swap chains to present images to and the index of the image for each swap chain (will almost always be a single one)
+        VkSwapchainKHR swap_chains[] = { swap_chain_ };
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = swap_chains;
+        present_info.pImageIndices = &image_index;
+
+        present_info.pResults = nullptr; // Optional. Allows to specify an array of VkResult values to check for every individual swap chain if presentation was successful
+                                        // Not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
+
+        // Submits the request to present an image to the swap chain
+        vkQueuePresentKHR(present_queue_, &present_info);
+    }
+
+    void CreateSemaphores()
+    {
+        VkSemaphoreCreateInfo semaphore_info{};
+        semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        if (vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &image_available_semaphore_) != VK_SUCCESS ||
+            vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &render_finished_semaphore_) != VK_SUCCESS)
+        {
+
+            throw std::runtime_error("Failed to create semaphores!");
+        }
+    }
+
+
+
     GLFWwindow* window_ = nullptr;
     const uint32_t SCREEN_WIDTH = 800;
     const uint32_t SCREEN_HEIGHT = 600;
@@ -1059,10 +1310,15 @@ private:
     std::vector<VkImage> swap_chain_images_; // image handles will be automatically cleaned up by destruction of swap chain.
     VkFormat swap_chain_image_format_;
     VkExtent2D swap_chain_extent_;
-    std::vector<VkImageView> swap_chain_image_views_;   // Will be explicitely created by us -> We have to clean them up!
+    std::vector<VkImageView> swap_chain_image_views_;   // Will be explicitly created by us -> We have to clean them up!
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
     VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
+    std::vector<VkFramebuffer> swap_chain_framebuffers_;
+    VkCommandPool command_pool_ = VK_NULL_HANDLE;
+    std::vector<VkCommandBuffer> command_buffers_;
+    VkSemaphore image_available_semaphore_ = VK_NULL_HANDLE;
+    VkSemaphore render_finished_semaphore_ = VK_NULL_HANDLE;
 };
 
 int main()
