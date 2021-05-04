@@ -4,7 +4,6 @@ function AddVulkan()
     
     postbuildcommands
     { 
-        --"{COPY} \"$(SolutionDir)ThirdParty\\SDL2\\lib\\%{cfg.platform}\\SDL2.dll\" \"$(OutDir)\""
     }
     links
     {
