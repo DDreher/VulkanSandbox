@@ -91,14 +91,15 @@ private:
 
     void InitVulkan()
     {
-        // The instance is the connection between the application and the Vulkan library. We also tell the driver some more information, e.g. what validation layers or extensions we need.
+        // The instance is the connection between the application and the Vulkan library. We also tell the driver some more information,
+        // e.g. what validation layers or extensions we need.
         CreateVulkanInstance();
 
         // Register our debug callback for validation layers.
         SetupDebugManager();    
 
         // A surface represents an abstract type to present rendered images to. The surface in our program will be backed by the window that we've already opened with GLFW.
-        // We have to create surface before we select the physical device to ensure that the device meets our requirements.
+        // We have to create a surface before we select the physical device to ensure that the device meets our requirements.
         CreateSurface(); 
 
         // Get handle to the physical GPU which meets our requirements.
@@ -116,7 +117,8 @@ private:
         CreateImageViews();
 
         // Tell Vulkan about the framebuffer attachments that will be used while rendering
-        // (how many color and depth buffers there will be, how many samples to use for each of them and how their contents should be handled throughout the rendering operations)
+        // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
+        // how their contents should be handled throughout the rendering, operations,...
         CreateRenderPass();
 
         // Specify every single thing of the render pipeline stages...
@@ -164,12 +166,10 @@ private:
         }
 
         vkDestroyPipeline(logical_device_, graphics_pipeline_, nullptr);
-
         vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
 
         vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
 
-        // Clean up Vulkan
         for (auto image_view : swap_chain_image_views_)
         {
             vkDestroyImageView(logical_device_, image_view, nullptr);
@@ -268,8 +268,12 @@ private:
     bool CheckInstanceExtensionSupport(const std::vector<const char*>& required_extensions)
     {
         uint32_t supported_extensions_count = 0;
+
+        // We first have to query the number of supported extensions so we can allocate the required memory
         vkEnumerateInstanceExtensionProperties(nullptr, &supported_extensions_count, nullptr);
         std::vector<VkExtensionProperties> supported_extension_properties(supported_extensions_count);
+
+        // And then we can copy the data to our buffer
         vkEnumerateInstanceExtensionProperties(nullptr, &supported_extensions_count, supported_extension_properties.data());
 
 #ifndef NDEBUG
@@ -280,6 +284,7 @@ private:
         }
 #endif
 
+        // Check if every required extension is actually available
         for(const char* required_ext : required_extensions)
         {
             bool found_extension = false;
@@ -423,7 +428,8 @@ private:
     {
         QueueFamilyIndices indices;
 
-        // VkQueueFamilyProperties contains details about the queue family, including the type of operations that are supported and the number of queues that can be created based on that family
+        // VkQueueFamilyProperties contains details about the queue family,
+        // e.g. the type of operations that are supported and the number of queues that can be created based on that family
         uint32_t queue_family_count = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
         std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
@@ -464,7 +470,6 @@ private:
     SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device)
     {
         SwapChainSupportDetails details;
-
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.capabilities);
 
         uint32_t surface_format_count;
@@ -494,20 +499,21 @@ private:
         std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
         std::set<uint32_t> unique_queue_families = { indices.graphics_family.value(), indices.present_family.value() };
 
-        float queue_priority = 1.0f; // Queue priorities [0.0f, 1.0f] influence the scheduling of command buffer execution. Required even for 1 queue!
+        float queue_priority = 1.0f;    // Queue priorities [0.0f, 1.0f] influence the scheduling of command buffer execution.
+                                        // Required even for a single queue!
 
         for(uint32_t queue_family : unique_queue_families)
         {
             VkDeviceQueueCreateInfo queue_create_info{};
             queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
             queue_create_info.queueFamilyIndex = indices.graphics_family.value();
-            queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple thread and submit them all at once.
+            queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple threads and submit them all at once.
             queue_create_info.pQueuePriorities = &queue_priority;
             queue_create_infos.push_back(queue_create_info);
         }
 
-        // Specify used device features
-        // (We can query them with vkGetPhysicalDeviceFeatures, e.g. geometry shaders)
+        // Specify used device features, e.g. geometry shaders
+        // We can query them with vkGetPhysicalDeviceFeatures
         VkPhysicalDeviceFeatures device_features{};
 
         // Create logical device
@@ -522,7 +528,6 @@ private:
         // It could be the case that we use a GPU without this feature, for example if we only rely on compute operations.
         create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions_.size());
         create_info.ppEnabledExtensionNames = device_extensions_.data();
-
 
         // Specify device specific validation layers
         // Previous implementations of Vulkan made a distinction between instance and device specific validation layers, but this is no longer the case
@@ -570,15 +575,17 @@ private:
         create_info.surface = surface_; // Swap chain is tied to this surface
         create_info.minImageCount = image_count;
         create_info.imageFormat = surface_format.format;
-        swap_chain_image_format_ = surface_format.format;   // Save for later use...
         create_info.imageColorSpace = surface_format.colorSpace;
         create_info.imageExtent = extent;
-        swap_chain_extent_ = extent;    // Save for later use...
         create_info.imageArrayLayers = 1;   // Amount of layers each image consists of. 1 unless developing a stereoscopic 3D application.
         create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;   // What kind of operations images in the swap chain are used for. We'll render directly to them -> Color attachment.
                                                                         // We could also first render to a separate image and then do some post-processing operations.
                                                                         // In that case we may use a value like VK_IMAGE_USAGE_TRANSFER_DST_BIT to use a memory operation to transfer the
                                                                         // rendered image to a swap chain image.
+
+        // Save for later use...
+        swap_chain_image_format_ = surface_format.format;
+        swap_chain_extent_ = extent;
 
         // Specify how to handle swap chain images that will be used across multiple queue families 
         // E.g. if graphics queue is different from presentation queue, we'll draw onto images in swap chain from the graphics queue 
@@ -648,7 +655,7 @@ private:
 
     VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes)
     {
-        // VK_PRESENT_MODE_IMMEDIATE_KHR - Submitted images are transferred to screen right away => Possible tearing. Guaranteed to be availabe.
+        // VK_PRESENT_MODE_IMMEDIATE_KHR - Submitted images are transferred to screen right away => Possible tearing. Guaranteed to be available.
         // VK_PRESENT_MODE_FIFO_KHR - Swap chain is fifo queue. Images are taken from queue on display refresh. If queue is full the program has to wait -> Similar to vsync!
         // VK_PRESENT_MODE_FIFO_RELAXED_KHR - Similar to VK_PRESENT_MODE_FIFO_KHR, but if swap chain is empty the next rendered image will be shown instantly -> Possible tearing.
         // VK_PRESENT_MODE_MAILBOX_KHR - Similar to VK_PRESENT_MODE_FIFO_KHR, but if queue is full the application just replaces the already queued images. Can be used for triple buffering.
@@ -668,7 +675,7 @@ private:
     {
         // Swap extent is the resolution of the swap chain images in PIXELS! We have to keep that in mind for high DPI screens, e.g. Retina displays.
         
-        // Usually Vulkan tell us to match the window resolution and sets the extends by itself.
+        // Usually Vulkan tells us to match the window resolution and sets the extends by itself.
         if (capabilities.currentExtent.width != UINT32_MAX)
         {
             return capabilities.currentExtent;
@@ -698,7 +705,8 @@ private:
     void CreateImageViews()
     {
         // To use any VkImage (e.g. those in the swap chain) in the render pipeline we have to create a VkImageView object.
-        // An image view describes how to access the image and which part of the image to access, e.g. if it should be treated as a 2D texture depth texture without any mipmapping levels.
+        // An image view describes how to access the image and which part of the image to access,
+        // e.g. if it should be treated as a 2D depth texture without any mipmapping levels.
 
         swap_chain_image_views_.resize(swap_chain_images_.size());
 
@@ -737,7 +745,6 @@ private:
     {
         uint32_t layer_count;
         vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
-
         std::vector<VkLayerProperties> available_layers(layer_count);
         vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
 
@@ -774,22 +781,24 @@ private:
 
     void CreateRenderPass()
     {
-        // Specify how many color and depth buffers there will be, how many samples to use for each of them and how their contents should be handled throughout the rendering operations
+        // Specify how many color and depth buffers there will be, how many samples to use for each of them and
+        // how their contents should be handled throughout the rendering operations
         VkAttachmentDescription color_attachment{};
         color_attachment.format = swap_chain_image_format_; // should match the format of the swap chain images
         color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;   // No multisampling for now -> Only 1 sample.
-        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;   // What to do with the data in the attachment before rendering
+        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;  // What to do with the data in the attachment before rendering
                                                                 //VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
                                                                 //VK_ATTACHMENT_LOAD_OP_CLEAR : Clear the values to a constant at the start
                                                                 //VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them
                                                                 // => We clear the screen to black before drawing a new frame.
 
-        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // What to do with the data in the attachment after rendering
-                                                                // VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
-                                                                // VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering operation
-                                                                // => We're interested in seeing the rendered polygons on the screen, so we're going with the store operation here.
+        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;    // What to do with the data in the attachment after rendering
+                                                                    // VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
+                                                                    // VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering operation
+                                                                    // => We're interested in seeing the rendered polygons on the screen, so we're going with the store operation here.
 
-        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;    // Our application won't do anything with the stencil buffer, so the results of loading and storing are irrelevant
+        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   // Our application won't do anything with the stencil buffer
+                                                                            // -> the results of loading and storing are irrelevant
         color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;  
 
         color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Specifies which layout the image will have before the render pass begins.
@@ -800,10 +809,10 @@ private:
                                                                     // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : Images to be used as destination for a memory copy operation
 
         color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // specifies the layout to automatically transition to when the render pass finishes
-                                                                        // We want image to be ready for presentation using the swap chain after rendering.
+                                                                        // We want the image to be ready for presentation using the swap chain after rendering.
 
         // Subpasses and attachment references
-        // A single render pass can consist of multiple subpasses. Subpasses are subsequent rendering operations that depend on the contents of framebuffers in previous passes,
+        // A single render pass can consist of multiple subpasses. Subpasses are subsequent rendering operations that depend on the contents of frame buffers in previous passes,
         // e.g. a sequence of post-processing effects that are applied one after another.
         // Grouping these rendering operations into one render pass, Vulkan is able to reorder the operations and conserve memory bandwidth for possibly better performance.
         
@@ -811,7 +820,7 @@ private:
         // The following other types of attachments can be referenced by a subpass:
         // pInputAttachments: Attachments that are read from a shader
         // pResolveAttachments : Attachments used for multisampling color attachments
-        // pDepthStencilAttachment : Attachment for depthand stencil data
+        // pDepthStencilAttachment : Attachment for depth and stencil data
         // pPreserveAttachments : Attachments that are not used by this subpass, but for which the data must be preserved
         VkAttachmentReference color_attachment_ref{};
         color_attachment_ref.attachment = 0;    // specifies which attachment to reference by its index in the attachment descriptions array of VkRenderPassCreateInfo
@@ -819,7 +828,7 @@ private:
                                                                                 // Vulkan will automatically transition the attachment to this layout when the subpass is started
 
         VkSubpassDescription subpass{};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;    // We have to explicit that this is a graphics subpass. Could also be a compute subpass in the future!
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;    // We have to be explicit that this is a graphics subpass. Could also be a compute subpass in the future!
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
 
@@ -909,7 +918,8 @@ private:
         VkPipelineInputAssemblyStateCreateInfo input_assembly_info{};
         input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        input_assembly_info.primitiveRestartEnable = VK_FALSE;  // if true, it's possible to break up lines and triangles in _STRIP topology modes by using a special index of 0xFFFF or 0xFFFFFFFF
+        input_assembly_info.primitiveRestartEnable = VK_FALSE;  // if true, it's possible to break up lines and triangles in _STRIP topology modes by
+                                                                // using a special index of 0xFFFF or 0xFFFFFFFF
 
         // Viewports and scissors
         // Viewport describes the region of the framebuffer that output will be rendered to (almost always (0, 0) to (width, height))
@@ -939,19 +949,19 @@ private:
         // Also performs depth testing, face culling and the scissor test, can be configured to output fragments that fill entire polygons or just the edges (wireframe rendering). 
         VkPipelineRasterizationStateCreateInfo rasterizer_info{};
         rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer_info.depthClampEnable = VK_FALSE;    // If true, fragments beyond near/far planes are clamped to them as opposed to being discarded.
+        rasterizer_info.depthClampEnable = VK_FALSE;        // If true, fragments beyond near/far planes are clamped to them as opposed to being discarded.
         rasterizer_info.rasterizerDiscardEnable = VK_FALSE; // If true, geometry never passes through the rasterizer stage, basically disabling any output to the framebuffer.
         rasterizer_info.polygonMode = VK_POLYGON_MODE_FILL; // determines how fragments are generated for geometry
                                                             // VK_POLYGON_MODE_FILL: Fill polygon area with fragments
                                                             // VK_POLYGON_MODE_LINE: Draw polygon edges as lines (wireframe) -> requires enabling as GPU feature
                                                             // VK_POLYGON_MODE_POINT: Draw polygon vertices as points -> requires enabling as GPU feature
-        rasterizer_info.lineWidth = 1.0f;    // Thickness of lines in terms of number of fragments. Max depends on hardware. Value > 1.0f require enabling of "wideLines" GPU feature.
+        rasterizer_info.lineWidth = 1.0f;   // Thickness of lines in terms of number of fragments. Max depends on hardware. Value > 1.0f require enabling of "wideLines" GPU feature.
         rasterizer_info.cullMode = VK_CULL_MODE_BACK_BIT;    // Regular culling logic: Front face, back face, both, or disabled.
         rasterizer_info.frontFace = VK_FRONT_FACE_CLOCKWISE; // Specifies the vertex order for faces to be considered front-facing
-        rasterizer_info.depthBiasEnable = VK_FALSE; // If true, the rasterizer will add a bias to the depth values (sometimes used for shadow mapping).
-        rasterizer_info.depthBiasConstantFactor = 0.0f; // Optional
-        rasterizer_info.depthBiasClamp = 0.0f;  // Optional
-        rasterizer_info.depthBiasSlopeFactor = 0.0f;    // Optional
+        rasterizer_info.depthBiasEnable = VK_FALSE;         // If true, the rasterizer will add a bias to the depth values (sometimes used for shadow mapping).
+        rasterizer_info.depthBiasConstantFactor = 0.0f;     // Optional
+        rasterizer_info.depthBiasClamp = 0.0f;              // Optional
+        rasterizer_info.depthBiasSlopeFactor = 0.0f;        // Optional
 
         // Multisampling - AA technique combining the fragment shader results of multiple polygons that rasterize to the same pixel. 
         // Because it doesn't need to run the fragment shader multiple times if only one polygon maps to a pixel, it is significantly less expensive than
@@ -1015,7 +1025,7 @@ private:
         // Uniform values are globals similar to dynamic state variables that can be changed at drawing time to alter the behavior of your shaders without having to recreate them.
         // They are commonly used to pass the transformation matrix to the vertex shader, or to create texture samplers in the fragment shader.
         // Even if we don't use any we have to create an empty pipeline layout.
-        // Also sine we create it, we also have to clean it up later on!
+        // Also since we create it, we also have to clean it up later on!
         VkPipelineLayoutCreateInfo pipeline_layout_info{};
         pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipeline_layout_info.setLayoutCount = 0; // Optional
@@ -1044,8 +1054,8 @@ private:
         pipeline_create_info.renderPass = render_pass_;
         pipeline_create_info.subpass = 0;   // index of the sub pass where this graphics pipeline will be used
         pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE;   // Optional. Vulkan allows creation of a new graphics pipeline by deriving from an existing pipeline
-                                                                    // Deriving is less expensive to set up when pipelines have lots of functionality in common and switching between pipelines
-                                                                    // from the same parent can be done quicker.
+                                                                    // Deriving is less expensive to set up when pipelines have lots of functionality in common and
+                                                                    // switching between pipelines from the same parent can be done quicker.
         pipeline_create_info.basePipelineIndex = -1; // Optional
 
         // Time to create the graphics pipeline!
@@ -1067,7 +1077,7 @@ private:
         VkShaderModuleCreateInfo create_info{};
         create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         create_info.codeSize = code.size();
-        create_info.pCode = reinterpret_cast<const uint32_t*>(code.data()); // Have to reinterpret cast here because we got char* but uint32_t* is expected. std::vector takes care of alignment.
+        create_info.pCode = reinterpret_cast<const uint32_t*>(code.data()); // Have to reinterpret cast here because we got char* but uint32_t* is expected.
 
         VkShaderModule shader_module;
         if (vkCreateShaderModule(logical_device_, &create_info, nullptr, &shader_module) != VK_SUCCESS)
@@ -1091,8 +1101,9 @@ private:
             VkFramebufferCreateInfo frambuffer_info{};
             frambuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             frambuffer_info.renderPass = render_pass_;  // Framebuffer needs to be compatible with this render pass -> Use same number and types of attachments
-            frambuffer_info.attachmentCount = 1;    // Right now we only have one color attachment
-            frambuffer_info.pAttachments = attachments; // Specify the VkImageView objects that should be bound to the respective attachment descriptions in the render pass pAttachment array.
+            frambuffer_info.attachmentCount = 1;        // Right now we only have one color attachment
+            frambuffer_info.pAttachments = attachments; // Specify the VkImageView objects that should be bound to the respective attachment descriptions in the
+                                                        // render pass pAttachment array.
             frambuffer_info.width = swap_chain_extent_.width;
             frambuffer_info.height = swap_chain_extent_.height;
             frambuffer_info.layers = 1; // swap chain images are single images -> 1 layer.
@@ -1114,9 +1125,11 @@ private:
         VkCommandPoolCreateInfo pool_info{};
         pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         pool_info.queueFamilyIndex = queue_family_indices.graphics_family.value();   // We only use drawing commands, so we stick to the graphics queue family.
-        pool_info.flags = 0; // Optional.    VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
-                            //   VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
-                            // For now we will only fill the command buffer once at the beginning of the program, so we don't use on any of the flags.
+        pool_info.flags = 0;    // Optional.
+                                // VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
+                                // VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: Allow command buffers to be rerecorded individually.
+                                // Without this flag they all have to be reset together.
+                                // For now we will only fill the command buffer once at the beginning of the program, so we don't use on any of the flags.
                            
         if (vkCreateCommandPool(logical_device_, &pool_info, nullptr, &command_pool_) != VK_SUCCESS)
         {
@@ -1132,7 +1145,7 @@ private:
         VkCommandBufferAllocateInfo alloc_info{};
         alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         alloc_info.commandPool = command_pool_;
-        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // specifies if the allocated command buffers are primary or secondary command buffers
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // Specifies if the allocated command buffers are primary or secondary command buffers
                                                             // VK_COMMAND_BUFFER_LEVEL_PRIMARY -> Can be submitted to a queue for execution, but cannot be called from other command buffers
                                                             // VK_COMMAND_BUFFER_LEVEL_SECONDARY -> Cannot be submitted directly, but can be called from primary command buffers.
         alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers_.size());
@@ -1147,9 +1160,10 @@ private:
         {
             VkCommandBufferBeginInfo begin_info{};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            begin_info.flags = 0; // Optional.  VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
-                                  //            VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
-                                  //            VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
+            begin_info.flags = 0;   // Optional.
+                                    // VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+                                    // VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
+                                    // VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
             begin_info.pInheritanceInfo = nullptr;  // Optional. Specifies which state to inherit from the calling primary command buffers.
                                                     // Only relevant for secondary command buffers.
 
@@ -1163,7 +1177,8 @@ private:
             render_pass_info.renderPass = render_pass_;
             render_pass_info.framebuffer = swap_chain_framebuffers_[i];
             render_pass_info.renderArea.offset = { 0, 0 };
-            render_pass_info.renderArea.extent = swap_chain_extent_; // Pixels outside this region will have undefined values. It should match the size of the attachments for best performance.
+            render_pass_info.renderArea.extent = swap_chain_extent_;    // Pixels outside this region will have undefined values.
+                                                                        // It should match the size of the attachments for best performance.
         
             // define the clear values to use for VK_ATTACHMENT_LOAD_OP_CLEAR
             VkClearValue clear_color = { 0.0f, 0.0f, 0.0f, 1.0f };
@@ -1171,14 +1186,13 @@ private:
             render_pass_info.pClearValues = &clear_color;
 
             vkCmdBeginRenderPass(command_buffers_[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
-
             vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
 
             // We've now told Vulkan which operations to execute in the graphics pipeline and which attachment to use in the fragment shader,
             // so all that remains is telling it to draw the triangle...
-            uint32_t vertex_count = 3;  // We don't have the vertex buffer yet, but technically we still want to draw 3 vertices...
+            uint32_t vertex_count = 3;      // We don't have the vertex buffer yet, but technically we still want to draw 3 vertices...
             uint32_t instance_count = 1;    // We only render one instance
-            uint32_t first_vertex = 0;  // Offset into the vertex buffer
+            uint32_t first_vertex = 0;      // Offset into the vertex buffer
             uint32_t first_instance = 0;    // offset for instanced rendering
             vkCmdDraw(command_buffers_[i], vertex_count, instance_count, first_vertex , first_instance);
 
@@ -1199,10 +1213,10 @@ private:
         //  * Return the image to the swap chain for presentation
         // Since this is async, the execution order is undefined. Yet the operations depend on each other => We have to synchronize.
         
-        // Fences and semaphores are both objects that can be used for coordinating operations, e.g. by having one operation signal and another operation wait for a fence
-        // or semaphore to go from the unsignaled to signaled state.
+        // Fences and semaphores are both objects that can be used for coordinating operations,
+        // e.g. by having one operation signal and another operation wait for a fence or semaphore to go from the unsignaled to signaled state.
         // Fences can be accessed from the application (vkWaitForFences), semaphores can't.
-        // Fences are designed to synchronize the application itself with rendering operation
+        // Fences are designed to synchronize the application itself with rendering operations
         // Semaphores are used to sync operations within or across command queues.
         // => We want to synchronize the queue operations of draw commands and presentation, which makes semaphores the best fit.
     
@@ -1232,8 +1246,9 @@ private:
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = signal_semaphores;
 
-        if (vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)  // Takes an array of VkSubmitInfo structs as argument for efficiency when the workload is much larger
-                                                                                            // Last paramter is optional fence that will be signaled when the command buffers finish execution
+        if (vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)  // Takes an array of VkSubmitInfo structs as argument for efficiency when the
+                                                                                            // workload is much larger
+                                                                                            // Last parameter is optional fence that will be signaled when command buffers finish execution
         {
             throw std::runtime_error("Failed to submit draw command buffer!");
         }
@@ -1251,12 +1266,17 @@ private:
         present_info.swapchainCount = 1;
         present_info.pSwapchains = swap_chains;
         present_info.pImageIndices = &image_index;
-
-        present_info.pResults = nullptr; // Optional. Allows to specify an array of VkResult values to check for every individual swap chain if presentation was successful
-                                        // Not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
+        present_info.pResults = nullptr;    // Optional. Allows to specify an array of VkResult values to check for every individual swap chain if presentation was successful
+                                            // Not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
 
         // Submits the request to present an image to the swap chain
         vkQueuePresentKHR(present_queue_, &present_info);
+
+        // If the CPU is submitting work faster than the GPU can keep up with then the queue will slowly fill up with work
+        // Also, we're reusing the semaphores and the command buffers for multiple frames at the same time
+        // Quick fix: Wait for work to be finished right after submitting.
+        // Caveat: We won't use the GPU optimally because we stall the graphics pipeline.
+        vkQueueWaitIdle(present_queue_);
     }
 
     void CreateSemaphores()
@@ -1271,8 +1291,6 @@ private:
             throw std::runtime_error("Failed to create semaphores!");
         }
     }
-
-
 
     GLFWwindow* window_ = nullptr;
     const uint32_t SCREEN_WIDTH = 800;
