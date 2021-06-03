@@ -137,7 +137,7 @@ private:
         // Create command buffers for each image in the swap chain.
         CreateCommandBuffers();
 
-        CreateSemaphores();
+        CreateSyncObjects();
     }
 
     void MainLoop()
@@ -155,8 +155,12 @@ private:
 
     void Cleanup()
     {
-        vkDestroySemaphore(logical_device_, render_finished_semaphore_, nullptr);
-        vkDestroySemaphore(logical_device_, image_available_semaphore_, nullptr);
+        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            vkDestroySemaphore(logical_device_, render_finished_semaphores_[i], nullptr);
+            vkDestroySemaphore(logical_device_, image_available_semaphores_[i], nullptr);
+            vkDestroyFence(logical_device_, inflight_frame_fences_[i], nullptr);
+        }
 
         vkDestroyCommandPool(logical_device_, command_pool_, nullptr);  // Also destroys any command buffers we retrieved from the pool
 
@@ -1207,6 +1211,9 @@ private:
 
     void DrawFrame()
     {
+        // Wait for requested frame to be finished
+        vkWaitForFences(logical_device_, 1, &inflight_frame_fences_[current_frame_], VK_TRUE /*wait for all fences until return*/, UINT64_MAX /*disable time out*/);
+
         // Drawing a frame involves these operations, which will be executed asynchronously with a single function call:
         //  * Acquire an image from the swap chain
         //  * Execute the command buffer with that image as attachment in the framebuffer
@@ -1221,13 +1228,23 @@ private:
         // => We want to synchronize the queue operations of draw commands and presentation, which makes semaphores the best fit.
     
         uint32_t image_index;   // refers to the VkImage idx in our swap_chain_images_ array
-        vkAcquireNextImageKHR(logical_device_, swap_chain_, UINT64_MAX /*disable time out*/, image_available_semaphore_, VK_NULL_HANDLE, &image_index);
+        vkAcquireNextImageKHR(logical_device_, swap_chain_, UINT64_MAX /*disable time out*/, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
+
+        // If MAX_FRAMES_IN_FLIGHT is higher than the number of swap chain images or vkAcquireNextImageKHR returns images out-of-order 
+        // it's possible that we may start rendering to a swap chain image that is already in flight.
+        // To avoid this, we need to track for each swap chain image if a frame in flight is currently using it.
+        if (inflight_images_[image_index] != VK_NULL_HANDLE)
+        {
+            vkWaitForFences(logical_device_, 1, &inflight_images_[image_index], VK_TRUE, UINT64_MAX);
+        }
+        // Mark the image as now being in use by this frame
+        inflight_images_[image_index] = inflight_frame_fences_[current_frame_];
 
         VkSubmitInfo submit_info{};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-        VkSemaphore wait_semaphores[] = { image_available_semaphore_ };  // which semaphores to wait on before execution begins 
-        VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };  // in which stages of the pipeline to wait
+        VkSemaphore wait_semaphores[] = { image_available_semaphores_[current_frame_] };  // which semaphores to wait on before execution begins 
+        VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; // in which stages of the pipeline to wait
                                                                                                 // We want to wait with writing colors to the image until it's available,
                                                                                                 // so we're specifying the stage of the graphics pipeline that writes to the color attachment
                                                                                                 // => Theoretically the implementation can already start executing our vertex shader etc
@@ -1242,13 +1259,16 @@ private:
         submit_info.pCommandBuffers = &command_buffers_[image_index];
 
         // Specify which semaphores to signal once the command buffer(s) have finished execution
-        VkSemaphore signal_semaphores[] = { render_finished_semaphore_ };
+        VkSemaphore signal_semaphores[] = { render_finished_semaphores_[current_frame_] };
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = signal_semaphores;
 
-        if (vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE) != VK_SUCCESS)  // Takes an array of VkSubmitInfo structs as argument for efficiency when the
-                                                                                            // workload is much larger
-                                                                                            // Last parameter is optional fence that will be signaled when command buffers finish execution
+        vkResetFences(logical_device_, 1, &inflight_frame_fences_[current_frame_]);  // restore the fence to the unsignaled state 
+
+        if (vkQueueSubmit(graphics_queue_, 1, &submit_info, inflight_frame_fences_[current_frame_]) != VK_SUCCESS)  // Takes an array of VkSubmitInfo structs as argument for efficiency 
+                                                                                                                    // when the workload is much larger
+                                                                                                                    // Last parameter is optional fence that will be
+                                                                                                                    // signaled when command buffers finish execution
         {
             throw std::runtime_error("Failed to submit draw command buffer!");
         }
@@ -1272,25 +1292,38 @@ private:
         // Submits the request to present an image to the swap chain
         vkQueuePresentKHR(present_queue_, &present_info);
 
-        // If the CPU is submitting work faster than the GPU can keep up with then the queue will slowly fill up with work
-        // Also, we're reusing the semaphores and the command buffers for multiple frames at the same time
-        // Quick fix: Wait for work to be finished right after submitting.
-        // Caveat: We won't use the GPU optimally because we stall the graphics pipeline.
-        vkQueueWaitIdle(present_queue_);
+        // Advance the frame index
+        current_frame_ = (++current_frame_) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    void CreateSemaphores()
+    void CreateSyncObjects()
     {
+        image_available_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
+        render_finished_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
+        inflight_frame_fences_.resize(MAX_FRAMES_IN_FLIGHT);
+        inflight_images_.resize(swap_chain_images_.size(), VK_NULL_HANDLE);
+
         VkSemaphoreCreateInfo semaphore_info{};
         semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        if (vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &image_available_semaphore_) != VK_SUCCESS ||
-            vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &render_finished_semaphore_) != VK_SUCCESS)
-        {
+        VkFenceCreateInfo fence_info{};
+        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_info.flags = VK_FENCE_CREATE_SIGNALED_BIT; // By default we create fences in unsignaled state
+                                                         // -> We'd wait indefinitely because we never submitted the fence before
 
-            throw std::runtime_error("Failed to create semaphores!");
+        for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            if (vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &image_available_semaphores_[i]) != VK_SUCCESS ||
+                vkCreateSemaphore(logical_device_, &semaphore_info, nullptr, &render_finished_semaphores_[i]) != VK_SUCCESS ||
+                vkCreateFence(logical_device_, &fence_info, nullptr, &inflight_frame_fences_[i]) != VK_SUCCESS)
+            {
+
+                throw std::runtime_error("Failed to create semaphores!");
+            }
         }
     }
+
+    static const int MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
 
     GLFWwindow* window_ = nullptr;
     const uint32_t SCREEN_WIDTH = 800;
@@ -1309,7 +1342,8 @@ private:
 #endif
 
     const std::vector<const char*> device_extensions_ = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };    // Availability of a present queue implicitly ensures that swapchains are supported
-                                                                                                // but being explicit is good practice. Also we have to explicitly enable the extension anyway...
+                                                                                                // but being explicit is good practice. Also we have to explicitly enable the extension
+                                                                                                // anyway...
 
     VkQueue graphics_queue_ = VK_NULL_HANDLE;   // We do not have to clean this up manually, clean up of logical device takes care of this.
     VkQueue present_queue_ = VK_NULL_HANDLE;
@@ -1325,8 +1359,11 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> command_buffers_;
-    VkSemaphore image_available_semaphore_ = VK_NULL_HANDLE;
-    VkSemaphore render_finished_semaphore_ = VK_NULL_HANDLE;
+    std::vector<VkSemaphore> image_available_semaphores_;
+    std::vector<VkSemaphore> render_finished_semaphores_;
+    std::vector<VkFence> inflight_frame_fences_;
+    std::vector<VkFence> inflight_images_;
+    uint32_t current_frame_ = 0;
 };
 
 int main()
