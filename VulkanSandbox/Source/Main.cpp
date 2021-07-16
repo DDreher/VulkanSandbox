@@ -198,8 +198,6 @@ private:
         // Specify every single thing of the render pipeline stages...
         CreateGraphicsPipeline();
 
-        CreateVertexBuffer();
-
         // The attachments specified during render pass creation are bound by wrapping them into a VkFramebuffer object
         // A framebuffer object references all of the VkImageView objects that represent the attachments.
         // However, the image that we have to use for the attachment depends on which image the swap chain returns when we retrieve one for presentation.
@@ -209,6 +207,8 @@ private:
         // Drawing operations and memory transfers are stored in command buffers. These are retrieved from command pools.
         // We can fill these buffers in multiple threads and then execute them all at once on the main thread.
         CreateCommandPool();
+
+        CreateVertexBuffer();
 
         // Create command buffers for each image in the swap chain.
         CreateCommandBuffers();
@@ -1375,17 +1375,17 @@ private:
         throw std::runtime_error("failed to find suitable memory type!");
     }
 
-    void CreateVertexBuffer()
+    void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory)
     {
         VkBufferCreateInfo buffer_info{};
         buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_info.size = sizeof(vertices[0]) * vertices.size();
-        buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // Specify how the buffer is used. Can be multiple with bitwise or.
+        buffer_info.size = size;
+        buffer_info.usage = usage; // Specify how the buffer is used. Can be multiple with bitwise or.
         buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;    // Buffers can be owned by specific queue families or shared between multiple queue families.
                                                                 // This buffer will only be used by the graphics queue, so we use exclusive access.
         buffer_info.flags = 0;  // Used to configure sparse buffer memory (not relevant for us right now)
 
-        if (vkCreateBuffer(logical_device_, &buffer_info, nullptr, &vertex_buffer_) != VK_SUCCESS)
+        if (vkCreateBuffer(logical_device_, &buffer_info, nullptr, &out_buffer) != VK_SUCCESS)
         {
             throw std::runtime_error("Failed to create vertex buffer");
         }
@@ -1394,39 +1394,110 @@ private:
         // We have to do this ourselves!
 
         // First query memory requirements.
-        VkMemoryRequirements memRequirements;
-        vkGetBufferMemoryRequirements(logical_device_, vertex_buffer_, &memRequirements);
+        VkMemoryRequirements mem_requirements;
+        vkGetBufferMemoryRequirements(logical_device_, out_buffer, &mem_requirements);
 
         // Then allocate the memory
-        VkMemoryAllocateInfo allocInfo{};
-        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocInfo.allocationSize = memRequirements.size;
-        allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT  // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT -> We want to write to the vertex buffer from the CPU
-                                                                                        // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT -> Makes sure that data is directly written to memory
-                                                                                        // otherwise the writes may be cached first and are subsequently not directly available.
-                                                                                        // This may cost some performance
-                                                                                        // Alternatively we could also call vkFlushMappedMemoryRanges after writing or
-                                                                                        // vkInvalidateMappedMemoryRanges before reading mapped memory.
-        );
+        // NOTE: In a real application, we shouldn't allocate memory for every single resource we create. (inefficient / max num of simultaneous mem allocations is limited)
+        // Instead we should allocate a large chunk of memory and then split it up with the offset parameters by using a custom allocator.
+        // See https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator for examples
+        VkMemoryAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc_info.allocationSize = mem_requirements.size;
+        alloc_info.memoryTypeIndex = FindMemoryType(mem_requirements.memoryTypeBits, properties);
 
-        if (vkAllocateMemory(logical_device_, &allocInfo, nullptr, &vertex_buffer_memory_) != VK_SUCCESS)
+        if (vkAllocateMemory(logical_device_, &alloc_info, nullptr, &out_buffer_memory) != VK_SUCCESS)
         {
             throw std::runtime_error("failed to allocate vertex buffer memory!");
         }
 
         // Finally associate the allocated memory with the vertex buffer
-        vkBindBufferMemory(logical_device_, vertex_buffer_, vertex_buffer_memory_, 0 /*offset within the memory*/);
+        vkBindBufferMemory(logical_device_, out_buffer, out_buffer_memory, 0 /*offset within the memory*/);
+    }
 
-        // Map allocated memory into CPU address space
+    void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
+    {
+        // Memory transfer operations are executed using command buffers, just like drawing commands
+        // -> We have to create a temporary command buffer
+        // We may want to create a separate command pool for short-lived buffers so we can leverage some memory allocation optimizations.
+        // For this we'd have to use the VK_COMMAND_POOL_CREATE_TRANSIENT_BIT 
+
+        VkCommandBufferAllocateInfo alloc_info{};
+        alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        alloc_info.commandPool = command_pool_;
+        alloc_info.commandBufferCount = 1;
+
+        VkCommandBuffer command_buffer;
+        vkAllocateCommandBuffers(logical_device_, &alloc_info, &command_buffer);
+
+        // Record the command buffer immediately
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // Let driver know that we'll use this command buffer only once
+        vkBeginCommandBuffer(command_buffer, &begin_info);
+
+        VkBufferCopy copy_region{};
+        copy_region.srcOffset = 0; // Optional
+        copy_region.dstOffset = 0; // Optional
+        copy_region.size = size;
+        vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+
+        vkEndCommandBuffer(command_buffer);
+
+        // Submit the command buffer to complete the buffer copy
+        VkSubmitInfo submit_info{};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer;
+
+        vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE);
+
+        // Execute transfer immediately. We could use a fence to wait for this to be executed
+        // or we simply wait for the transfer queue to be idle.
+        // -> A fence would allow us to schedule multiple transfers at the same time instead of doing one transfer at a time.
+        // -> There's more room for performance optimizations
+        vkQueueWaitIdle(graphics_queue_);
+
+        // Once the transfer is done we can clean up.
+        vkFreeCommandBuffers(logical_device_, command_pool_, 1, &command_buffer);
+    }
+
+    void CreateVertexBuffer()
+    {
+        VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
+
+        // Use host-visible buffer as temporary staging buffer, which is later copied to device local memory.
+        // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
+        // To copy to device local memory we therefore can't use vkMapMemory.
+        // Instead we have to specify the VK_BUFFER_USAGE_TRANSFER_SRC_BIT or VK_BUFFER_USAGE_TRANSFER_DST_BIT properties.
+        VkBuffer staging_buffer;
+        VkDeviceMemory staging_buffer_memory;
+        CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+        // ^^^ Properties
+        // VK_BUFFER_USAGE_TRANSFER_SRC_BIT -> Buffer can be used as source in a memory transfer operation.
+        // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT -> We want to write to the vertex buffer from the CPU
+        // VK_MEMORY_PROPERTY_HOST_COHERENT_BIT -> Makes sure that data is directly written to memory
+        // otherwise the writes may be cached first and are subsequently not directly available.
+        // This may cost some performance
+        // Alternatively we could also call vkFlushMappedMemoryRanges after writing or
+        // vkInvalidateMappedMemoryRanges before reading mapped memory.
+
+        // Map allocated memory into CPU address space, copy over vertices to staging buffer
         void* data;
-        vkMapMemory(logical_device_, vertex_buffer_memory_, 0 /*offset*/, buffer_info.size, 0 /*additional flags. Has to be 0.*/, &data);
+        vkMapMemory(logical_device_, staging_buffer_memory, 0 /*offset*/, buffer_size, 0 /*additional flags. Has to be 0.*/, &data);
+        memcpy(data, vertices.data(), (size_t) buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+        vkUnmapMemory(logical_device_, staging_buffer_memory);
 
-        // Copy vertex data to GPU. No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
-        memcpy(data, vertices.data(), (size_t) buffer_info.size);
+        CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer_, vertex_buffer_memory_);
+        // ^^^
+        // VK_BUFFER_USAGE_TRANSFER_DST_BIT -> Buffer can be used as destination in a memory transfer operation.
 
-        // And release the mapping
-        vkUnmapMemory(logical_device_, vertex_buffer_memory_);
+        CopyBuffer(staging_buffer, vertex_buffer_, buffer_size);
+
+        // Once the copy command is done we can clean up the staging buffer
+        vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
+        vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
     }
 
     void DrawFrame()
