@@ -84,9 +84,21 @@ private:
     void InitWindow()
     {
         glfwInit();
+
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);   // Prevent creation of OpenGL context
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);     // Disable window resize
+
         window_ = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Vulkan Sandbox", nullptr, nullptr);
+        glfwSetWindowUserPointer(window_, this);    // Save pointer to app, so we can access it on frame buffer resize
+        glfwSetFramebufferSizeCallback(window_, FramebufferResizeCallback);
+    }
+
+    static void FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+    {
+        // Have to use a static function here, because GLFW doesn't pass the pointer to our application.
+        // However, glfw allows us to store our pointer with glfwSetWindowUserPointer. :) Yay.
+        
+        auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+        app->was_frame_buffer_resized_ = true;
     }
 
     void InitVulkan()
@@ -155,6 +167,8 @@ private:
 
     void Cleanup()
     {
+        CleanUpSwapChain();
+
         for(size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
         {
             vkDestroySemaphore(logical_device_, render_finished_semaphores_[i], nullptr);
@@ -164,22 +178,6 @@ private:
 
         vkDestroyCommandPool(logical_device_, command_pool_, nullptr);  // Also destroys any command buffers we retrieved from the pool
 
-        for (auto framebuffer : swap_chain_framebuffers_)
-        {
-            vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
-        }
-
-        vkDestroyPipeline(logical_device_, graphics_pipeline_, nullptr);
-        vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
-
-        vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
-
-        for (auto image_view : swap_chain_image_views_)
-        {
-            vkDestroyImageView(logical_device_, image_view, nullptr);
-        }
-
-        vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
         vkDestroyDevice(logical_device_, nullptr);
 
         if(enable_validation_layers_)
@@ -639,6 +637,66 @@ private:
         vkGetSwapchainImagesKHR(logical_device_, swap_chain_, &image_count, nullptr);
         swap_chain_images_.resize(image_count); // We only specified the minimum num of images, so the swap chain could potentially contain more -> We have to resize!
         vkGetSwapchainImagesKHR(logical_device_, swap_chain_, &image_count, swap_chain_images_.data());
+    }
+
+    void CleanUpSwapChain()
+    {
+        for (auto framebuffer : swap_chain_framebuffers_)
+        {
+            vkDestroyFramebuffer(logical_device_, framebuffer, nullptr);
+        }
+
+        // We don't have to recreate the whole command pool.
+        vkFreeCommandBuffers(logical_device_, command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
+
+        vkDestroyPipeline(logical_device_, graphics_pipeline_, nullptr);
+        vkDestroyPipelineLayout(logical_device_, pipeline_layout_, nullptr);
+
+        vkDestroyRenderPass(logical_device_, render_pass_, nullptr);
+
+        for (auto image_view : swap_chain_image_views_)
+        {
+            vkDestroyImageView(logical_device_, image_view, nullptr);
+        }
+
+        vkDestroySwapchainKHR(logical_device_, swap_chain_, nullptr);
+    }
+
+    /*
+     *  Recreate SwapChain and all things depending on it.
+     */
+    void RecreateSwapChain()
+    {
+        int width = 0;
+        int height = 0;
+        glfwGetFramebufferSize(window_, &width, &height);
+
+        // In case we minimize the frame buffer will have size 0.
+        // -> We pause the application until it has a frame buffer with a valid size again.
+        while (width == 0 || height == 0)
+        {
+            glfwGetFramebufferSize(window_, &width, &height);
+            glfwWaitEvents();
+        }
+
+        // Wait until resources aren't used anymore
+        vkDeviceWaitIdle(logical_device_);  
+
+        // ^^^ This kinda sucks, because we have to stop rendering in order to recreate the swap chain.
+        // We could pass the old swap chain object to the vkSwapchainCreateInfoKHR struct and then destroy the old swap chain
+        // as soon as we're finished with it.
+
+        // Clean up old objects
+        CleanUpSwapChain();
+
+        // Then recreate swap chain itself, and subsequently everything that depends on it
+        CreateSwapChain();  
+        CreateImageViews(); // -> Are based directly on the swap chain images
+        CreateRenderPass(); // -> Depends on the format of the swap chain (format probably won't change, but it doesn't hurt to handle this case)
+        CreateGraphicsPipeline();   // -> Viewport and scissor rectangle size is specified here.
+                                    // We could skip this by using a dynamic state for the viewport / scissor rects
+        CreateFramebuffers();       // Directly depend on swap chain images
+        CreateCommandBuffers();     // Directly depend on swap chain images
     }
 
     VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats)
@@ -1228,7 +1286,20 @@ private:
         // => We want to synchronize the queue operations of draw commands and presentation, which makes semaphores the best fit.
     
         uint32_t image_index;   // refers to the VkImage idx in our swap_chain_images_ array
-        vkAcquireNextImageKHR(logical_device_, swap_chain_, UINT64_MAX /*disable time out*/, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
+        VkResult result = vkAcquireNextImageKHR(logical_device_, swap_chain_, UINT64_MAX /*disable time out*/, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
+
+        // Check for window resizes, so we can recreate the swap chain.
+        // VK_ERROR_OUT_OF_DATE_KHR -> Swap chain is incompatible with the surface. Typically happens on window resize, but not guaranteed.
+        // VK_SUBOPTIMAL_KHR -> Some parts of the swap chain are incompatible, but we could theoretically still present to the surface.
+        if(result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            RecreateSwapChain();
+            return;
+        }
+        else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            throw std::runtime_error("Failed to acquire swap chain image");
+        }
 
         // If MAX_FRAMES_IN_FLIGHT is higher than the number of swap chain images or vkAcquireNextImageKHR returns images out-of-order 
         // it's possible that we may start rendering to a swap chain image that is already in flight.
@@ -1290,7 +1361,19 @@ private:
                                             // Not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
 
         // Submits the request to present an image to the swap chain
-        vkQueuePresentKHR(present_queue_, &present_info);
+        result = vkQueuePresentKHR(present_queue_, &present_info);
+
+        // Explicitly check for window resize, so we can recreate the swap chain.
+        // In this case it's important to do this after present to ensure that the semaphores are in the correct state.
+        if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || was_frame_buffer_resized_)
+        {
+            was_frame_buffer_resized_ = false;
+            RecreateSwapChain();
+        }
+        else if (result != VK_SUCCESS)
+        {
+            throw std::runtime_error("Failed to present swap chain image to surface");
+        }
 
         // Advance the frame index
         current_frame_ = (++current_frame_) % MAX_FRAMES_IN_FLIGHT;
@@ -1364,6 +1447,7 @@ private:
     std::vector<VkFence> inflight_frame_fences_;
     std::vector<VkFence> inflight_images_;
     uint32_t current_frame_ = 0;
+    bool was_frame_buffer_resized_ = false;
 };
 
 int main()
