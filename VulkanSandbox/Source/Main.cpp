@@ -54,13 +54,20 @@ struct Vertex
     }
 };
 
-// Triangle stored as array of vertex data with interleaved vertex attributes
+// Quad stored as array of vertex data with interleaved vertex attributes
 // i.e. data is combined into one array of vertices.
+// Top-left corner is red, top-right is green, bottom-right is blue and bottom-left is white
 const std::vector<Vertex> vertices = 
 {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = // uint16_t is enough for our purposes. We could use uint32_t tho.
+{
+    0, 1, 2, 2, 3, 0
 };
 
 static std::vector<char> ReadFile(const std::string& filename)
@@ -208,7 +215,12 @@ private:
         // We can fill these buffers in multiple threads and then execute them all at once on the main thread.
         CreateCommandPool();
 
+        // Create and allocate buffers for our model we want to render
+        // We can further optimize this by storing both vertex and index buffer in a single vkBuffer to make it more cache friendly
+        // See: https://developer.nvidia.com/vulkan-memory-management
+        // We could even reuse the same chunk of memory for multiple resources if they are used during different render operations. (keyword: "aliasing")
         CreateVertexBuffer();
+        CreateIndexBuffer();
 
         // Create command buffers for each image in the swap chain.
         CreateCommandBuffers();
@@ -233,7 +245,9 @@ private:
     {
         CleanUpSwapChain();
 
-        // Destroy vertex buffer and corresponding memory
+        // Destroy buffers and corresponding memory
+        vkDestroyBuffer(logical_device_, index_buffer_, nullptr);
+        vkFreeMemory(logical_device_, index_buffer_memory_, nullptr);
         vkDestroyBuffer(logical_device_, vertex_buffer_, nullptr);
         vkFreeMemory(logical_device_, vertex_buffer_memory_, nullptr);
 
@@ -1327,8 +1341,16 @@ private:
             // so all that remains is binding the vertex buffer and drawing the triangle
             VkBuffer vertex_buffers[] = { vertex_buffer_ };
             VkDeviceSize offsets[] = { 0 };
-            vkCmdBindVertexBuffers(command_buffers_[i], 0 /*offset*/, 1 /*num bindings*/, vertex_buffers, offsets /*byte offsets to start reading the data from*/); // Bind vertex buffer to bindings
-            vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+
+            // Bind vertex buffer to bindings
+            vkCmdBindVertexBuffers(command_buffers_[i], 0 /*offset*/, 1 /*num bindings*/,
+                vertex_buffers, offsets /*byte offsets to start reading the data from*/); 
+            vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_, 0 /*offset*/, VK_INDEX_TYPE_UINT16);   // We can only bind one index buffer!
+                                                                                                            // Can't use different indices for each vertex attribute (e.g. for normals)
+                                                                                                            // Also: If we have uint32 indices, we have to adjust the type!
+
+            //vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);  // <-- Draws without index buffer
+            vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0); // <- Draws with index buffer
 
             vkCmdEndRenderPass(command_buffers_[i]);
 
@@ -1496,6 +1518,30 @@ private:
         CopyBuffer(staging_buffer, vertex_buffer_, buffer_size);
 
         // Once the copy command is done we can clean up the staging buffer
+        vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
+        vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
+    }
+
+    void CreateIndexBuffer()
+    {
+        // Basically same as CreateVertexBuffer, but now we create a buffer for the indices.
+        // Notice the VK_BUFFER_USAGE_INDEX_BUFFER_BIT
+         
+        VkDeviceSize buffer_size = sizeof(indices[0]) * indices.size();
+
+        VkBuffer staging_buffer;
+        VkDeviceMemory staging_buffer_memory;
+        CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+
+        void* data;
+        vkMapMemory(logical_device_, staging_buffer_memory, 0, buffer_size, 0, &data);
+        memcpy(data, indices.data(), (size_t)buffer_size);
+        vkUnmapMemory(logical_device_, staging_buffer_memory);
+
+        CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer_, index_buffer_memory_);
+
+        CopyBuffer(staging_buffer, index_buffer_, buffer_size);
+
         vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
         vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
     }
@@ -1681,6 +1727,8 @@ private:
     std::vector<VkFence> inflight_images_;
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;
+    VkBuffer index_buffer_;
+    VkDeviceMemory index_buffer_memory_;
 
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
