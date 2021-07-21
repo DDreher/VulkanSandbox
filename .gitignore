@@ -41,7 +41,11 @@
 !*.glsl
 !*.spv
 !*.frag
-!*.vert
+!*.
+
+# Texture files
+!*.png
+!*.jpg
 
 # Text files
 !*.txt
