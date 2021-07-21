@@ -69,6 +69,7 @@ project (ProjectName)
 	AddGLFW()
 	AddVulkan()
 	AddGLM()
+	AddSTB()
 
 	filter "files:**/ThirdParty/**.*"
 		flags "NoPCH"
