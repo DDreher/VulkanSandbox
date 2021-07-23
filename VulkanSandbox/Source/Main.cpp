@@ -1,13 +1,15 @@
 #define GLFW_INCLUDE_VULKAN // GLFW will load vulkan.h
 #define GLM_FORCE_RADIANS   // Ensure that matrix functions use radians as units
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE // GLM perspective projection matrix will use depth range of -1.0 to 1.0 by default. We need range of 0.0 to 1.0 for Vulkan.
-
+#define GLM_ENABLE_EXPERIMENTAL // Needed so we can use the hash functions of GLM types
 #include <chrono>
 
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
+#include <glm/gtx/hash.hpp>
 #include <stb/stb_image.h>
+#include <tiny_obj_loader.h>
 
 struct Vertex 
 {
@@ -68,7 +70,28 @@ struct Vertex
 
         return attribute_descriptions;
     }
+
+    // Need this so we can use hash maps
+    bool operator==(const Vertex& other) const
+    {
+        return pos_ == other.pos_ && color_ == other.color_ && tex_coords_ == other.tex_coords_;
+    }
 };
+
+// hash function for our Vertex struct
+namespace std
+{
+    template<> struct hash<Vertex>
+    {
+        size_t operator()(Vertex const& vertex) const
+        {
+            // Create hash according to http://en.cppreference.com/w/cpp/utility/hash
+            return ((hash<glm::vec3>()(vertex.pos_) ^
+                (hash<glm::vec3>()(vertex.color_) << 1)) >> 1) ^
+                (hash<glm::vec2>()(vertex.tex_coords_) << 1);
+        }
+    };
+}
 
 struct UniformBufferObject
 {
@@ -86,29 +109,6 @@ struct UniformBufferObject
     alignas(16) glm::mat4 proj;
 };
 
-// Quad stored as array of vertex data with interleaved vertex attributes
-// i.e. data is combined into one array of vertices.
-// Top-left corner is red, top-right is green, bottom-right is blue and bottom-left is white
-const std::vector<Vertex> vertices =
-{
-    {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-    {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-    {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = // uint16_t is enough for our purposes. We could use uint32_t tho.
-{
-    0, 1, 2, 2, 3, 0,
-
-    4, 5, 6, 6, 7, 4
-};
-
 static std::vector<char> ReadFile(const std::string& filename)
 {
     // ate: Start reading at the end of the file -> we can use the read position to determine the file size and allocate a buffer
@@ -117,7 +117,7 @@ static std::vector<char> ReadFile(const std::string& filename)
 
     if (!file.is_open())
     {
-        throw std::runtime_error("Failed to open file!");
+        throw std::runtime_error("Failed to open file: " + filename);
     }
 
     size_t file_size = (size_t)file.tellg();
@@ -264,6 +264,9 @@ private:
         CreateTextureImage();
         CreateTextureImageView();
         CreateTextureSampler();
+
+        // Populate vertices and indices
+        LoadModel();
 
         // Create and allocate buffers for our model we want to render
         // We can further optimize this by storing both vertex and index buffer in a single vkBuffer to make it more cache friendly
@@ -1549,17 +1552,17 @@ private:
             // Bind vertex buffer to bindings
             vkCmdBindVertexBuffers(command_buffers_[i], 0 /*offset*/, 1 /*num bindings*/,
                 vertex_buffers, offsets /*byte offsets to start reading the data from*/); 
-            vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_, 0 /*offset*/, VK_INDEX_TYPE_UINT16);   // We can only bind one index buffer!
+            vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_, 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
                                                                                                             // Can't use different indices for each vertex attribute (e.g. for normals)
                                                                                                             // Also: If we have uint32 indices, we have to adjust the type!
 
             // Bind descriptor set to the descriptors in the shader
             vkCmdBindDescriptorSets(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, // <- have to specify if we bind to graphics or compute pipeline
                 pipeline_layout_, 0, 1, &descriptor_sets_[i], 0, nullptr);
-            vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+            vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0);
 
             //vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);  // <-- Draws without index buffer
-            vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices.size()), 1, 0, 0, 0); // <- Draws with index buffer
+            vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
 
             vkCmdEndRenderPass(command_buffers_[i]);
 
@@ -1925,7 +1928,7 @@ private:
         int tex_width;
         int tex_height;
         int tex_channels;
-        stbi_uc* tex_data = stbi_load("assets/textures/test_texture.png", &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
+        stbi_uc* tex_data = stbi_load(TEXTURE_PATH.c_str(), &tex_width, &tex_height, &tex_channels, STBI_rgb_alpha);
         VkDeviceSize tex_size = tex_width * tex_height * 4; // 4 bytes per pixel, because we use RGBA
 
         if (tex_data == nullptr)
@@ -2022,9 +2025,75 @@ private:
         }
     }
 
+    void LoadModel()
+    {
+        // An OBJ file consists of positions, normals, texture coordinates and faces. Faces consist of an arbitrary amount of vertices, 
+        // where each vertex refers to a position, normal and/or texture coordinate by index. 
+        // This makes it possible to not just reuse entire vertices, but also individual attributes.
+
+        tinyobj::attrib_t attrib;
+        // ^^^ Holds all positions, normals and tex coords
+
+        std::vector<tinyobj::shape_t> shapes;
+        // ^^^ Contains all of the separate objects and their faces
+        // Each face consists of an array of vertices, and each vertex contains the indices of the position, normal and texture coordinate attributes
+
+        std::vector<tinyobj::material_t> materials;
+        // ^^^ OBJ models can also define a material and texture per face
+
+        std::string warn, err;
+
+        // Load the model with tinyobj
+        // LoadObj automatically triangulates the vertices by default
+        if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
+        {
+            throw std::runtime_error(warn + err);
+        }
+
+        // Fill vertices / indices array from loaded data
+        std::unordered_map<Vertex, uint32_t> unique_vertices{};
+
+        for (const auto& shape : shapes)
+        {
+            for (const auto& index : shape.mesh.indices)
+            {
+                Vertex vertex{};
+
+                // Look up the actual vertex attributes in the attrib arrays
+                // We can be sure that every face has 3 vertices.
+                // This is a flat array though, so we have to use a stride of 3
+                vertex.pos_ = 
+                {
+                    attrib.vertices[3 * index.vertex_index + 0],
+                    attrib.vertices[3 * index.vertex_index + 1],
+                    attrib.vertices[3 * index.vertex_index + 2]
+                };
+
+                // Similarly, every vertex has 2 texcoord values
+                vertex.tex_coords_ = 
+                {
+                    attrib.texcoords[2 * index.texcoord_index + 0],
+                    1.0f - attrib.texcoords[2 * index.texcoord_index + 1]   // OBJ format assumes 0 is at bottom, but it's actually at the top in our case
+                };
+
+                vertex.color_ = { 1.0f, 1.0f, 1.0f };
+
+                // Only keep unique vertices so we can make use of the index buffer
+                if(unique_vertices.count(vertex) == 0)
+                {
+                    uint32_t vertex_index = static_cast<uint32_t>(vertices_.size());
+                    unique_vertices[vertex] = vertex_index;
+                    vertices_.push_back(vertex);
+                }
+
+                indices_.push_back(unique_vertices[vertex]);
+            }
+        }
+    }
+
     void CreateVertexBuffer()
     {
-        VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
+        VkDeviceSize buffer_size = sizeof(vertices_[0]) * vertices_.size();
 
         // Use host-visible buffer as temporary staging buffer, which is later copied to device local memory.
         // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
@@ -2045,7 +2114,7 @@ private:
         // Map allocated memory into CPU address space, copy over vertices to staging buffer
         void* data;
         vkMapMemory(logical_device_, staging_buffer_memory, 0 /*offset*/, buffer_size, 0 /*additional flags. Has to be 0.*/, &data);
-        memcpy(data, vertices.data(), (size_t) buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+        memcpy(data, vertices_.data(), (size_t) buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
         vkUnmapMemory(logical_device_, staging_buffer_memory);
 
         CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer_, vertex_buffer_memory_);
@@ -2064,7 +2133,7 @@ private:
         // Basically same as CreateVertexBuffer, but now we create a buffer for the indices.
         // Notice the VK_BUFFER_USAGE_INDEX_BUFFER_BIT
          
-        VkDeviceSize buffer_size = sizeof(indices[0]) * indices.size();
+        VkDeviceSize buffer_size = sizeof(indices_[0]) * indices_.size();
 
         VkBuffer staging_buffer;
         VkDeviceMemory staging_buffer_memory;
@@ -2072,7 +2141,7 @@ private:
 
         void* data;
         vkMapMemory(logical_device_, staging_buffer_memory, 0, buffer_size, 0, &data);
-        memcpy(data, indices.data(), (size_t)buffer_size);
+        memcpy(data, indices_.data(), (size_t)buffer_size);
         vkUnmapMemory(logical_device_, staging_buffer_memory);
 
         CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer_, index_buffer_memory_);
@@ -2374,6 +2443,9 @@ private:
     const uint32_t SCREEN_WIDTH = 800;
     const uint32_t SCREEN_HEIGHT = 600;
 
+    const std::string MODEL_PATH = "assets/models/viking_room.obj";
+    const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
+
     VkInstance instance_ = VK_NULL_HANDLE;  // The connection between the application and the Vulkan library
     VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;  // We do not have to clean this up manually
@@ -2414,6 +2486,9 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> inflight_frame_fences_;
     std::vector<VkFence> inflight_images_;
+
+    std::vector<Vertex> vertices_;
+    std::vector<uint32_t> indices_;
 
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;

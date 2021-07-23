@@ -47,6 +47,11 @@
 !*.png
 !*.jpg
 
+# Model files
+!*.obj
+!*.mtl
+!*.fbx
+
 # Text files
 !*.txt
 !*.md
