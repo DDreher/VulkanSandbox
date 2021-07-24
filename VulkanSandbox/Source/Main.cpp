@@ -251,6 +251,9 @@ private:
         // We can fill these buffers in multiple threads and then execute them all at once on the main thread.
         CreateCommandPool();
 
+        // Init resources for MSAA
+        CreateColorResources();
+
         // Init resources for depth buffering
         CreateDepthResources();
 
@@ -509,6 +512,7 @@ private:
             if (CheckDeviceRequirements(device))
             {
                 physical_device_ = device;
+                num_msaa_samples_ = GetMaxNumSamples();
                 break;
             }
         }
@@ -793,6 +797,12 @@ private:
 
     void CleanUpSwapChain()
     {
+        // multisampled color buffer (MSAA)
+        vkDestroyImageView(logical_device_, color_image_view_, nullptr);
+        vkDestroyImage(logical_device_, color_image_, nullptr);
+        vkFreeMemory(logical_device_, color_image_memory_, nullptr);
+
+        // depth buffer
         vkDestroyImageView(logical_device_, depth_image_view_, nullptr);
         vkDestroyImage(logical_device_, depth_image_, nullptr);
         vkFreeMemory(logical_device_, depth_image_memory_, nullptr);
@@ -860,8 +870,10 @@ private:
         CreateGraphicsPipeline();   // -> Viewport and scissor rectangle size is specified here.
                                     // We could skip this by using a dynamic state for the viewport / scissor rects
          
-        // These directly depend on the swap chain images
+        CreateColorResources();
         CreateDepthResources();
+
+        // These directly depend on the swap chain images
         CreateFramebuffers();
         CreateUniformBuffers();
         CreateDescriptorPool();
@@ -1014,7 +1026,7 @@ private:
         // how their contents should be handled throughout the rendering operations
         VkAttachmentDescription color_attachment{};
         color_attachment.format = swap_chain_image_format_; // should match the format of the swap chain images
-        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;   // No multisampling for now -> Only 1 sample.
+        color_attachment.samples = num_msaa_samples_;   // No multisampling for now -> Only 1 sample.
         color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;  // What to do with the data in the attachment before rendering
                                                                 //VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
                                                                 //VK_ATTACHMENT_LOAD_OP_CLEAR : Clear the values to a constant at the start
@@ -1037,12 +1049,24 @@ private:
                                                                     // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : Images to be presented in the swap chain
                                                                     // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : Images to be used as destination for a memory copy operation
 
-        color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // specifies the layout to automatically transition to when the render pass finishes
-                                                                        // We want the image to be ready for presentation using the swap chain after rendering.
+        color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // specifies the layout to automatically transition to when the render pass finishes
+                                                                                 // multisampled images cannot be presented directly. We first need to resolve them to a regular image.
+                                                                                 // (does not apply to depth buffer, since it won't be presented)
+
+        // MSAA: Have to add a new attachment so we can resolve the multisampled color image to a regular image attachment with only a single sample
+        VkAttachmentDescription color_attachment_resolve{};
+        color_attachment_resolve.format = swap_chain_image_format_;
+        color_attachment_resolve.samples = VK_SAMPLE_COUNT_1_BIT;
+        color_attachment_resolve.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment_resolve.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        color_attachment_resolve.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        color_attachment_resolve.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        color_attachment_resolve.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         VkAttachmentDescription depth_attachment{};
         depth_attachment.format = FindDepthFormat();
-        depth_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        depth_attachment.samples = num_msaa_samples_;
         depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;    // depth data will not be used after drawing has finished (may allow hardware optimizations)
         depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1070,11 +1094,17 @@ private:
         depth_attachment_ref.attachment = 1;
         depth_attachment_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentReference color_attachment_resolve_ref{};
+        color_attachment_resolve_ref.attachment = 2;
+        color_attachment_resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
         VkSubpassDescription subpass{};
         subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;    // We have to be explicit that this is a graphics subpass. Could also be a compute subpass in the future!
         subpass.colorAttachmentCount = 1;
         subpass.pColorAttachments = &color_attachment_ref;
         subpass.pDepthStencilAttachment = &depth_attachment_ref;    //  a subpass can only use a single depth (+stencil) attachment
+        subpass.pResolveAttachments = &color_attachment_resolve_ref;    // This is enough to let the render pass define a multisample resolve operation
+                                                                        // which will let us render the image to screen
 
         // Subpass dependencies
         // Subpasses in a render pass automatically take care of image layout transitions. 
@@ -1109,7 +1139,7 @@ private:
 
         // Finally create the render pass
         VkRenderPassCreateInfo render_pass_info{};
-        std::array<VkAttachmentDescription, 2> attachments = { color_attachment, depth_attachment };
+        std::array<VkAttachmentDescription, 3> attachments = { color_attachment, depth_attachment, color_attachment_resolve };
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
         render_pass_info.attachmentCount = static_cast<uint32_t>(attachments.size());
         render_pass_info.pAttachments = attachments.data();
@@ -1257,7 +1287,7 @@ private:
         VkPipelineMultisampleStateCreateInfo multisampling_info{};
         multisampling_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
         multisampling_info.sampleShadingEnable = VK_FALSE;
-        multisampling_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+        multisampling_info.rasterizationSamples = num_msaa_samples_;
         multisampling_info.minSampleShading = 1.0f; // Optional
         multisampling_info.pSampleMask = nullptr; // Optional
         multisampling_info.alphaToCoverageEnable = VK_FALSE; // Optional
@@ -1394,19 +1424,20 @@ private:
         swap_chain_framebuffers_.resize(swap_chain_image_views_.size());
         for (size_t i=0; i < swap_chain_image_views_.size(); i++)
         {
-            std::array<VkImageView, 2> attachments = 
+            // This has to be in the correct order, as specified in the render pass!
+            std::array<VkImageView, 3> attachments = 
             {
-                swap_chain_image_views_[i], // Color attachment differs for every swap chain image
-                depth_image_view_           // depth buffer can be used by all of the swap chain images, because only a single subpass is running at the same time
+                color_image_view_,
+                depth_image_view_,  // depth buffer can be used by all of the swap chain images, because only a single subpass is running at the same time
+                swap_chain_image_views_[i] // Color attachment differs for every swap chain image
             };
-
 
             VkFramebufferCreateInfo frambuffer_info{};
             frambuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             frambuffer_info.renderPass = render_pass_;  // Framebuffer needs to be compatible with this render pass -> Use same number and types of attachments
             frambuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-            frambuffer_info.pAttachments = attachments.data(); // Specify the VkImageView objects that should be bound to the respective attachment descriptions in the
-                                                               // render pass pAttachment array.
+            frambuffer_info.pAttachments = attachments.data(); // Specify the VkImageView objects that should be bound to the respective attachment descriptions
+                                                               // in the render pass pAttachment array.
             frambuffer_info.width = swap_chain_extent_.width;
             frambuffer_info.height = swap_chain_extent_.height;
             frambuffer_info.layers = 1; // swap chain images are single images -> 1 layer.
@@ -1667,7 +1698,7 @@ private:
         EndSingleTimeCommands(command_buffer);
     }
 
-    void CreateImage(uint32_t width, uint32_t height, uint32_t num_mips, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+    void CreateImage(uint32_t width, uint32_t height, uint32_t num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
                      VkImage& image, VkDeviceMemory& image_memory)
     {
         VkImageCreateInfo image_info{};
@@ -1690,7 +1721,7 @@ private:
                                                                 // In our case, we transition the image to be a transfer destination and then copy the texel data to it from a buffer.
         image_info.usage = usage;    // We want to transfer data to this image and we want to access the image in the shader
         image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // Image is only used by the graphics queue family
-        image_info.samples = VK_SAMPLE_COUNT_1_BIT; // Related to multisampling. Only needed if image is used as attachment.
+        image_info.samples = num_samples; // Related to multisampling. Only needed if image is used as attachment.
         image_info.flags = 0; // Optional. Related to sparse images.
 
         if (vkCreateImage(logical_device_, &image_info, nullptr, &image) != VK_SUCCESS)
@@ -1899,12 +1930,22 @@ private:
         return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
     }
 
+    void CreateColorResources()
+    {
+        VkFormat color_format = swap_chain_image_format_;
+
+        // Create multisampled color buffer
+        CreateImage(swap_chain_extent_.width, swap_chain_extent_.height, 1, num_msaa_samples_, color_format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_image_, color_image_memory_);
+        color_image_view_ = CreateImageView(color_image_, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
+    }
+
     void CreateDepthResources()
     {
         VkFormat depth_format = FindDepthFormat();
 
         CreateImage(swap_chain_extent_.width, swap_chain_extent_.height,    // should have the same resolution as the color attachment
             1,  // No mip mapping
+            num_msaa_samples_,
             depth_format,    // A format that's supported by our physical device
             VK_IMAGE_TILING_OPTIMAL,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, // image usage appropriate for a depth attachment
@@ -2092,6 +2133,7 @@ private:
         // For example, we can use 2D coordinates to retrieve colors.
         CreateImage(tex_width, tex_height,
             num_mips_,
+            VK_SAMPLE_COUNT_1_BIT,
             VK_FORMAT_R8G8B8A8_SRGB,
             VK_IMAGE_TILING_OPTIMAL, // VK_IMAGE_TILING_LINEAR -> Texels are laid out in row-major order like the tex_data array
                                      // VK_IMAGE_TILING_OPTIMAL -> Texels are laid out in an implementation defined order for optimal access
@@ -2167,6 +2209,23 @@ private:
         {
             throw std::runtime_error("Failed to create texture sampler!");
         }
+    }
+
+    VkSampleCountFlagBits GetMaxNumSamples()
+    {
+        VkPhysicalDeviceProperties physical_device_properties;
+        vkGetPhysicalDeviceProperties(physical_device_, &physical_device_properties);
+
+        // We use depth buffering, so we have to account for both color and depth samples
+        VkSampleCountFlags counts = physical_device_properties.limits.framebufferColorSampleCounts & physical_device_properties.limits.framebufferDepthSampleCounts;
+        if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+        if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+        if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+        if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+        if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+        if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+        return VK_SAMPLE_COUNT_1_BIT;
     }
 
     void LoadModel()
@@ -2655,6 +2714,12 @@ private:
     VkImage depth_image_;    // Only need one, because only one draw operation is executed at a time.
     VkDeviceMemory depth_image_memory_;
     VkImageView depth_image_view_;
+
+    // MSAA
+    VkSampleCountFlagBits num_msaa_samples_ = VK_SAMPLE_COUNT_1_BIT; // By default we'll be using only one sample per pixel -> no multisampling
+    VkImage color_image_;   // offscreen buffer we sample from
+    VkDeviceMemory color_image_memory_;
+    VkImageView color_image_view_;
 
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
