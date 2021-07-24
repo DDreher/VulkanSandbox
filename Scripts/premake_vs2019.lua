@@ -24,7 +24,7 @@ workspace (ProjectName)
 	location "../"
 	basedir "../"
 	language "C++"
-	configurations {"Debug", "Release"}
+	configurations {"Debug", "ReleaseWithDebugInfo", "Release"}
 	platforms {"x64"}
 	warnings "default"
 	characterset ("MBCS")
@@ -38,6 +38,13 @@ workspace (ProjectName)
 		defines { "_DEBUG" }
 		symbols "On"
 		optimize "Off"
+		debugdir "$(SolutionDir)"
+
+	filter { "configurations:ReleaseWithDebugInfo" }
+		runtime "Release"
+		defines { "_RELEASE", "NDEBUG" }
+		symbols "On"
+		optimize "Full"
 		debugdir "$(SolutionDir)"
 		
 	filter { "configurations:Release" }
@@ -70,6 +77,7 @@ project (ProjectName)
 	AddVulkan()
 	AddGLM()
 	AddSTB()
+	AddTinyObjLoader()
 
 	filter "files:**/ThirdParty/**.*"
 		flags "NoPCH"
