@@ -45,3 +45,13 @@ function AddSTB(isTarget)
 
     filter {}
 end
+
+function AddTinyObjLoader(isTarget)  
+    defines { "MODULE_TINYOBJLOADER", "TINYOBJLOADER_IMPLEMENTATION" }
+    includedirs {
+        "$(SolutionDir)/ThirdParty/tinyobjloader/include/",
+    } 
+
+    filter {}
+end
+
