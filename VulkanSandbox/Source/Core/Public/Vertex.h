@@ -5,6 +5,7 @@
 #define GLM_ENABLE_EXPERIMENTAL // Needed so we can use the hash functions of GLM types
 #include <glm/glm.hpp>
 #include <glm/gtx/hash.hpp>
+#include <vulkan/vulkan_core.h>
 
 struct Vertex
 {
