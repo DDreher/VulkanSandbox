@@ -692,6 +692,7 @@ void VulkanRenderer::RecreateSwapChain()
 
     // In case we minimize the frame buffer will have size 0.
     // -> We pause the application until it has a frame buffer with a valid size again.
+    // TODO: Get rid of the glfw stuff. Ideally the renderer should be agnostic to glfw / sdl or whatever we use to create the window.
     while (width == 0 || height == 0)
     {
         glfwGetFramebufferSize(window_, &width, &height);
