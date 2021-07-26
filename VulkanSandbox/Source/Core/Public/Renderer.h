@@ -176,8 +176,6 @@ private:
     static const int MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
 
     GLFWwindow* window_ = nullptr;
-    const uint32_t SCREEN_WIDTH = 800;
-    const uint32_t SCREEN_HEIGHT = 600;
 
     const std::string MODEL_PATH = "assets/models/viking_room.obj";
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
