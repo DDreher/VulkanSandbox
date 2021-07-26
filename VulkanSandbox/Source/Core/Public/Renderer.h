@@ -5,7 +5,6 @@
 #define GLM_ENABLE_EXPERIMENTAL // Needed so we can use the hash functions of GLM types
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
-#include <glm/gtx/hash.hpp>
 
 #include "Vertex.h"
 
