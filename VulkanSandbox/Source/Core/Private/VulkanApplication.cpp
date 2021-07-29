@@ -12,9 +12,18 @@ void VulkanApplication::InitWindow()
 {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);   // Prevent creation of OpenGL context
-    window_ = glfwCreateWindow(SCREEN_WIDTH_, SCREEN_HEIGHT_, WINDOW_TITLE_.c_str(), nullptr, nullptr);
+    window_ = glfwCreateWindow(INITIAL_SCREEN_WIDTH_, INITIAL_SCREEN_HEIGHT_, WINDOW_TITLE_.c_str(), nullptr, nullptr);
     glfwSetWindowUserPointer(window_, this);    // Save pointer to app, so we can access it on frame buffer resize
     glfwSetFramebufferSizeCallback(window_, WindowResizeCallback);
+}
+
+void VulkanApplication::Cleanup()
+{
+    Renderer_.Cleanup();
+
+    // Clean up glfw
+    glfwDestroyWindow(window_);
+    glfwTerminate();
 }
 
 void VulkanApplication::WindowResizeCallback(GLFWwindow* window, int width, int height)
@@ -25,20 +34,29 @@ void VulkanApplication::WindowResizeCallback(GLFWwindow* window, int width, int 
     app->Renderer_.OnFrameBufferResize();
 }
 
-void VulkanApplication::MainLoop()
+void VulkanApplication::Update(float delta)
 {
-    while (!glfwWindowShouldClose(window_))
-    {
-        glfwPollEvents();
-        Renderer_.DrawFrame();
-    }
+
 }
 
-void VulkanApplication::Cleanup()
+void VulkanApplication::Render()
 {
-    Renderer_.Cleanup();
+    Renderer_.DrawFrame();
+}
 
-    // Clean up glfw
-    glfwDestroyWindow(window_);
-    glfwTerminate();
+void VulkanApplication::MainLoop()
+{
+    while (glfwWindowShouldClose(window_) == false)
+    {
+        glfwPollEvents();
+
+        tick_timer_.Update();
+
+        for (uint32_t i = 0; i < tick_timer_.GetAccumulatedTicks(); i++)
+        {
+            Update(TickTimer::MICROSEC_PER_TICK);
+        }
+        
+        Render();
+    }
 }

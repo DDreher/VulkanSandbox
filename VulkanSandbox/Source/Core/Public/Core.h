@@ -9,3 +9,8 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <vector>
+
+#include "Log.h"
+
+// Logging
+#define LOG(...) Log::PrintLine(__VA_ARGS__)
