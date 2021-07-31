@@ -39,21 +39,22 @@ void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT
     }
 }
 
+void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
+{
+    was_frame_buffer_resized_ = true;
+    framebuffer_width_ = width;
+    framebuffer_height_ = height;
+}
+
 void VulkanRenderer::Init(GLFWwindow* window)
 {
     assert(window != nullptr);
-    window_ = window;
 
-    InitVulkan();
-}
+    int width, height;
+    glfwGetFramebufferSize(window, &width, &height);
+    framebuffer_width_ = static_cast<uint32_t>(width);
+    framebuffer_width_ = static_cast<uint32_t>(height);
 
-void VulkanRenderer::OnFrameBufferResize()
-{
-    was_frame_buffer_resized_ = true;
-}
-
-void VulkanRenderer::InitVulkan()
-{
     // The instance is the connection between the application and the Vulkan library. We also tell the driver some more information,
     // e.g. what validation layers or extensions we need.
     CreateVulkanInstance();
@@ -63,7 +64,7 @@ void VulkanRenderer::InitVulkan()
 
     // A surface represents an abstract type to present rendered images to. The surface in our program will be backed by the window that we've already opened with GLFW.
     // We have to create a surface before we select the physical device to ensure that the device meets our requirements.
-    CreateSurface();
+    CreateSurface(window);
 
     // Get handle to the physical GPU which meets our requirements.
     SelectPhysicalDevice();
@@ -131,19 +132,6 @@ void VulkanRenderer::InitVulkan()
     CreateSyncObjects();
 }
 
-void VulkanRenderer::MainLoop()
-{
-    while (!glfwWindowShouldClose(window_))
-    {
-        glfwPollEvents();
-        DrawFrame();
-    }
-
-    // operations in drawFrame are asynchronous -> When we exit the loop there may still be some ongoing operations and we shouldn't destroy the resources until we are done using those.
-    // => Wait for the logical device to finish operations before exiting mainLoop and destroying the window.
-    vkDeviceWaitIdle(logical_device_);
-}
-
 void VulkanRenderer::Cleanup()
 {
     // operations in drawFrame are asynchronous -> When we exit the loop there may still be some ongoing operations and we shouldn't destroy the resources until we are done using those.
@@ -184,10 +172,6 @@ void VulkanRenderer::Cleanup()
 
     vkDestroySurfaceKHR(instance_, surface_, nullptr);
     vkDestroyInstance(instance_, nullptr);
-
-    // Clean up glfw
-    glfwDestroyWindow(window_);
-    glfwTerminate();
 }
 
 void VulkanRenderer::CreateVulkanInstance()
@@ -329,12 +313,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::DebugCallback(VkDebugUtilsMessage
     return VK_FALSE;
 }
 
-void VulkanRenderer::CreateSurface()
+void VulkanRenderer::CreateSurface(GLFWwindow* window)
 {
+    assert(window != nullptr);
+
     // glfw offers a handy abstraction for surface creation.
     // It automatically fills a VkWin32SurfaceCreateInfoKHR struct with the platform specific window and process handles
     // and then calls the platform specific function to create the surface, e.g. vkCreateWin32SurfaceKHR
-    if (glfwCreateWindowSurface(instance_, window_, nullptr, &surface_) != VK_SUCCESS)
+    if (glfwCreateWindowSurface(instance_, window, nullptr, &surface_) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create window surface!");
     }
@@ -686,16 +672,11 @@ void VulkanRenderer::CleanUpSwapChain()
 
 void VulkanRenderer::RecreateSwapChain()
 {
-    int width = 0;
-    int height = 0;
-    glfwGetFramebufferSize(window_, &width, &height);
-
     // In case we minimize the frame buffer will have size 0.
     // -> We pause the application until it has a frame buffer with a valid size again.
     // TODO: Get rid of the glfw stuff. Ideally the renderer should be agnostic to glfw / sdl or whatever we use to create the window.
-    while (width == 0 || height == 0)
+    while (framebuffer_width_ == 0 || framebuffer_height_ == 0)
     {
-        glfwGetFramebufferSize(window_, &width, &height);
         glfwWaitEvents();
     }
 
@@ -775,13 +756,10 @@ VkExtent2D VulkanRenderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capa
         // Some window managers allow extends that differ from window resolution, as indicated by setting the width and height in currentExtent to max of uint32_t.
         // In that case, pick the resolution that best matches the window within the minImageExtent and maxImageExtent bounds.
 
-        // Important: We have to query the frame buffer size from glfw to get the window extents in PIXELS instead of screen coordinates.
-        int width, height;
-        glfwGetFramebufferSize(window_, &width, &height);
-
+        // Important: Extent in PIXELS instead of screen coordinates.
         VkExtent2D actual_extent = {
-            static_cast<uint32_t>(width),
-            static_cast<uint32_t>(height)
+            static_cast<uint32_t>(framebuffer_width_),
+            static_cast<uint32_t>(framebuffer_height_)
         };
 
         // Clamp to range [minImageExtent, maxImageExtent]
@@ -2440,8 +2418,8 @@ void VulkanRenderer::DrawFrame()
     // In this case it's important to do this after present to ensure that the semaphores are in the correct state.
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || was_frame_buffer_resized_)
     {
-        was_frame_buffer_resized_ = false;
         RecreateSwapChain();
+        was_frame_buffer_resized_ = false;
     }
     else if (result != VK_SUCCESS)
     {

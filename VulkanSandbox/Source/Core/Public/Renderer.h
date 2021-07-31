@@ -48,15 +48,11 @@ class VulkanRenderer
 {
 public:
     void Init(GLFWwindow* window);
-    void OnFrameBufferResize();
+    void OnFrameBufferResize(uint32_t width, uint32_t height);
     void DrawFrame();
     void Cleanup();
 
 private:
-
-    void InitVulkan();
-
-    void MainLoop();
 
     void CreateVulkanInstance();
 
@@ -69,7 +65,7 @@ private:
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
         const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
 
-    void CreateSurface();
+    void CreateSurface(GLFWwindow* window);
 
     void SelectPhysicalDevice();
 
@@ -176,6 +172,9 @@ private:
     static const int MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
 
     GLFWwindow* window_ = nullptr;
+
+    uint32_t framebuffer_width_ = 0;
+    uint32_t framebuffer_height_ = 0;
 
     const std::string MODEL_PATH = "assets/models/viking_room.obj";
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";

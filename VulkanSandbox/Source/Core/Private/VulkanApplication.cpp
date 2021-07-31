@@ -31,7 +31,7 @@ void VulkanApplication::WindowResizeCallback(GLFWwindow* window, int width, int 
     // Have to use a static function here, because GLFW doesn't pass the pointer to our application.
     // However, glfw allows us to store our pointer with glfwSetWindowUserPointer. :) Yay.
     auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
-    app->Renderer_.OnFrameBufferResize();
+    app->Renderer_.OnFrameBufferResize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 }
 
 void VulkanApplication::Update(float delta)
