@@ -62,6 +62,7 @@ project (ProjectName)
 	AddSourceFiles(ProjectName)
 	includedirs { "$(ProjectDir)" }
 	IncludeModule {"Core"}
+	IncludeModule {"Renderer"}
 	
 	pchheader ("Core.h")
 	pchsource ("../" .. ProjectName .. "/Source/Core/Private/Core.cpp")
