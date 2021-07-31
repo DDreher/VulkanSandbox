@@ -74,7 +74,8 @@ struct Vertex
     }
 };
 
-// hash function for our Vertex struct
+// Define hash function for our Vertex struct.
+// We use a hash map to get rid of duplicated vertices in loaded models.
 namespace std
 {
     template<> struct hash<Vertex>

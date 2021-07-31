@@ -207,16 +207,24 @@ private:
 
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
 
-    VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;  // Combination of all descriptor bindings
+    // Used by a pipeline to access the descriptor sets.
+    // Defines interface between shader stages used by the pipeline and shader resources (but doesn't do the actual binding!)
     VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
+
+    // Pipeline State Object. Used to bake all states that affect a pipeline.
+    // VK requires us to specify graphics and compute pipelines upfront.
+    // -> We have to create a new pipeline for each combination of pipeline states.
     VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
 
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_ = VK_NULL_HANDLE;
     std::vector<VkCommandBuffer> command_buffers_;
 
+    // Semaphores - Device-internal synchronizations. Coordinate operations within the graphics queue, ensure correct command ordering
     std::vector<VkSemaphore> image_available_semaphores_;
     std::vector<VkSemaphore> render_finished_semaphores_;
+
+    // Fences - Host-Device-Synchronization. Use to check completion of queued operations, e.g. command buffer executions.
     std::vector<VkFence> inflight_frame_fences_;
     std::vector<VkFence> inflight_images_;
 
@@ -232,6 +240,13 @@ private:
     std::vector<VkDeviceMemory> uniform_buffers_memory_;    // Array, because we need one uniform buffer per swap chain image!
 
     VkDescriptorPool descriptor_pool_;
+
+    // Describes shader binding layout, without referencing any descriptor sets
+    // Similar to pipeline layout, it's only a blueprint.
+    VkDescriptorSetLayout descriptor_set_layout_ = VK_NULL_HANDLE;
+
+    // Stores which resources are bound to binding points in a shader.
+    // -> Glue between shaders and the actual resources.
     std::vector<VkDescriptorSet> descriptor_sets_;
 
     uint32_t num_mips_;
