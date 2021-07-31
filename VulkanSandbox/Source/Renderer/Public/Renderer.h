@@ -233,8 +233,7 @@ private:
     std::vector<uint32_t> indices_;
 
     Buffer vertex_buffer_;
-    VkBuffer index_buffer_;
-    VkDeviceMemory index_buffer_memory_;
+    Buffer index_buffer_;
 
     std::vector<VkBuffer> uniform_buffers_;
     std::vector<VkDeviceMemory> uniform_buffers_memory_;    // Array, because we need one uniform buffer per swap chain image!

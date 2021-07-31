@@ -149,9 +149,7 @@ void VulkanRenderer::Cleanup()
     vkDestroyDescriptorSetLayout(logical_device_, descriptor_set_layout_, nullptr);
 
     // Destroy buffers and corresponding memory
-    vkDestroyBuffer(logical_device_, index_buffer_, nullptr);
-    vkFreeMemory(logical_device_, index_buffer_memory_, nullptr);
-
+    index_buffer_.Destroy();
     vertex_buffer_.Destroy();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
@@ -1405,7 +1403,7 @@ void VulkanRenderer::CreateCommandBuffers()
         // Bind vertex buffer to bindings
         vkCmdBindVertexBuffers(command_buffers_[i], 0 /*offset*/, 1 /*num bindings*/,
             vertex_buffers, offsets /*byte offsets to start reading the data from*/);
-        vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_, 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
+        vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_.buffer_handle_, 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
                                                                                                         // Can't use different indices for each vertex attribute (e.g. for normals)
                                                                                                         // Also: If we have uint32 indices, we have to adjust the type!
 
@@ -2165,9 +2163,11 @@ void VulkanRenderer::CreateIndexBuffer()
     memcpy(staging_buffer.GetMapped(), indices_.data(), (size_t)buffer_size);
     staging_buffer.Unmap();
 
-    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer_, index_buffer_memory_);
+    index_buffer_.device_ = logical_device_;
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        index_buffer_.buffer_handle_, index_buffer_.memory_handle_);
 
-    CopyBuffer(staging_buffer.buffer_handle_, index_buffer_, buffer_size);
+    CopyBuffer(staging_buffer.buffer_handle_, index_buffer_.buffer_handle_, buffer_size);
 
     staging_buffer.Destroy();
 }
