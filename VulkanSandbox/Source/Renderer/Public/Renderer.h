@@ -7,6 +7,7 @@
 #include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
 
 #include "Vertex.h"
+#include "Buffer.h"
 
 struct GLFWwindow;
 
@@ -231,8 +232,7 @@ private:
     std::vector<Vertex> vertices_;
     std::vector<uint32_t> indices_;
 
-    VkBuffer vertex_buffer_;
-    VkDeviceMemory vertex_buffer_memory_;
+    Buffer vertex_buffer_;
     VkBuffer index_buffer_;
     VkDeviceMemory index_buffer_memory_;
 

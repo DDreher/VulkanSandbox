@@ -8,7 +8,6 @@
 #include <stb/stb_image.h>
 #include <tiny_obj_loader.h>
 
-#include "Buffer.h"
 #include "FileIO.h"
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator,
@@ -152,8 +151,8 @@ void VulkanRenderer::Cleanup()
     // Destroy buffers and corresponding memory
     vkDestroyBuffer(logical_device_, index_buffer_, nullptr);
     vkFreeMemory(logical_device_, index_buffer_memory_, nullptr);
-    vkDestroyBuffer(logical_device_, vertex_buffer_, nullptr);
-    vkFreeMemory(logical_device_, vertex_buffer_memory_, nullptr);
+
+    vertex_buffer_.Destroy();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1400,7 +1399,7 @@ void VulkanRenderer::CreateCommandBuffers()
 
         // We've now told Vulkan which operations to execute in the graphics pipeline and which attachment to use in the fragment shader,
         // so all that remains is binding the vertex buffer and drawing the triangle
-        VkBuffer vertex_buffers[] = { vertex_buffer_ };
+        VkBuffer vertex_buffers[] = { vertex_buffer_.buffer_handle_ };
         VkDeviceSize offsets[] = { 0 };
 
         // Bind vertex buffer to bindings
@@ -2138,11 +2137,13 @@ void VulkanRenderer::CreateVertexBuffer()
     memcpy(staging_buffer.GetMapped(), vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
     staging_buffer.Unmap();
 
-    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer_, vertex_buffer_memory_);
+    vertex_buffer_.device_ = logical_device_;
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        vertex_buffer_.buffer_handle_, vertex_buffer_.memory_handle_);
     // ^^^
     // VK_BUFFER_USAGE_TRANSFER_DST_BIT -> Buffer can be used as destination in a memory transfer operation.
 
-    CopyBuffer(staging_buffer.buffer_handle_, vertex_buffer_, buffer_size);
+    CopyBuffer(staging_buffer.buffer_handle_, vertex_buffer_.buffer_handle_, buffer_size);
 
     // Once the copy command is done we can clean up the staging buffer
     staging_buffer.Destroy();
