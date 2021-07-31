@@ -8,6 +8,7 @@
 #include <stb/stb_image.h>
 #include <tiny_obj_loader.h>
 
+#include "Buffer.h"
 #include "FileIO.h"
 
 VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator,
@@ -1935,14 +1936,14 @@ void VulkanRenderer::CreateTextureImage()
     // Add 1 so that we have at least one mip level
 
     // First copy to a staging buffer
-    VkBuffer staging_buffer;
-    VkDeviceMemory staging_buffer_memory;
-    CreateBuffer(tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+    Buffer staging_buffer;
+    staging_buffer.device_ = logical_device_;
+    CreateBuffer(tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
 
-    void* data;
-    vkMapMemory(logical_device_, staging_buffer_memory, 0, tex_size, 0, &data);
-    memcpy(data, tex_data, static_cast<size_t>(tex_size));
-    vkUnmapMemory(logical_device_, staging_buffer_memory);
+    staging_buffer.Map(tex_size);
+    memcpy(staging_buffer.GetMapped(), tex_data, static_cast<size_t>(tex_size));
+    staging_buffer.Unmap();
 
     stbi_image_free(tex_data); // We copied the data, so we don't need this anymore.
 
@@ -1966,7 +1967,7 @@ void VulkanRenderer::CreateTextureImage()
     // ^^^ VK_IMAGE_LAYOUT_UNDEFINED, cause we don't care about the contents before performing the copy operation
 
     // Then execute the buffer to image copy operation
-    CopyBufferToImage(staging_buffer, texture_image_, static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height));
+    CopyBufferToImage(staging_buffer.buffer_handle_, texture_image_, static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height));
 
     // To be able to start sampling from the texture image in the shader, we need one last transition to prepare it for shader access
     //TransitionImageLayout(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, num_mips_);
@@ -1974,9 +1975,7 @@ void VulkanRenderer::CreateTextureImage()
     // This final transition is already handled in GenerateMips :)
     GenerateMipmaps(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, tex_width, tex_height, num_mips_);
 
-    // Finally clean up the buffers
-    vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
-    vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
+    staging_buffer.Destroy();
 }
 
 void VulkanRenderer::CreateTextureImageView()
@@ -2120,9 +2119,10 @@ void VulkanRenderer::CreateVertexBuffer()
     // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
     // To copy to device local memory we therefore can't use vkMapMemory.
     // Instead we have to specify the VK_BUFFER_USAGE_TRANSFER_SRC_BIT or VK_BUFFER_USAGE_TRANSFER_DST_BIT properties.
-    VkBuffer staging_buffer;
-    VkDeviceMemory staging_buffer_memory;
-    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+    Buffer staging_buffer;
+    staging_buffer.device_ = logical_device_;
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
     // ^^^ Properties
     // VK_BUFFER_USAGE_TRANSFER_SRC_BIT -> Buffer can be used as source in a memory transfer operation.
     // VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT -> We want to write to the vertex buffer from the CPU
@@ -2133,20 +2133,19 @@ void VulkanRenderer::CreateVertexBuffer()
     // vkInvalidateMappedMemoryRanges before reading mapped memory.
 
     // Map allocated memory into CPU address space, copy over vertices to staging buffer
-    void* data;
-    vkMapMemory(logical_device_, staging_buffer_memory, 0 /*offset*/, buffer_size, 0 /*additional flags. Has to be 0.*/, &data);
-    memcpy(data, vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
-    vkUnmapMemory(logical_device_, staging_buffer_memory);
+
+    staging_buffer.Map(buffer_size);
+    memcpy(staging_buffer.GetMapped(), vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+    staging_buffer.Unmap();
 
     CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer_, vertex_buffer_memory_);
     // ^^^
     // VK_BUFFER_USAGE_TRANSFER_DST_BIT -> Buffer can be used as destination in a memory transfer operation.
 
-    CopyBuffer(staging_buffer, vertex_buffer_, buffer_size);
+    CopyBuffer(staging_buffer.buffer_handle_, vertex_buffer_, buffer_size);
 
     // Once the copy command is done we can clean up the staging buffer
-    vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
-    vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
+    staging_buffer.Destroy();
 }
 
 void VulkanRenderer::CreateIndexBuffer()
@@ -2156,21 +2155,20 @@ void VulkanRenderer::CreateIndexBuffer()
 
     VkDeviceSize buffer_size = sizeof(indices_[0]) * indices_.size();
 
-    VkBuffer staging_buffer;
-    VkDeviceMemory staging_buffer_memory;
-    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_buffer_memory);
+    Buffer staging_buffer;
+    staging_buffer.device_ = logical_device_;
+    CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
 
-    void* data;
-    vkMapMemory(logical_device_, staging_buffer_memory, 0, buffer_size, 0, &data);
-    memcpy(data, indices_.data(), (size_t)buffer_size);
-    vkUnmapMemory(logical_device_, staging_buffer_memory);
+    staging_buffer.Map(buffer_size);
+    memcpy(staging_buffer.GetMapped(), indices_.data(), (size_t)buffer_size);
+    staging_buffer.Unmap();
 
     CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, index_buffer_, index_buffer_memory_);
 
-    CopyBuffer(staging_buffer, index_buffer_, buffer_size);
+    CopyBuffer(staging_buffer.buffer_handle_, index_buffer_, buffer_size);
 
-    vkDestroyBuffer(logical_device_, staging_buffer, nullptr);
-    vkFreeMemory(logical_device_, staging_buffer_memory, nullptr);
+    staging_buffer.Destroy();
 }
 
 void VulkanRenderer::CreateUniformBuffers()
