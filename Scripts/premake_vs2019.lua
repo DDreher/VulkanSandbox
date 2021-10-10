@@ -79,6 +79,7 @@ project (ProjectName)
 	AddGLM()
 	AddSTB()
 	AddTinyObjLoader()
+	AddSpdlog()
 
 	filter "files:**/ThirdParty/**.*"
 		flags "NoPCH"

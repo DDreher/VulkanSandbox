@@ -37,7 +37,7 @@ function AddGLFW()
     filter {}
 end
 
-function AddSTB(isTarget)  
+function AddSTB()  
     defines { "MODULE_STB", "STB_IMAGE_IMPLEMENTATION" }
     includedirs {
         "$(SolutionDir)/ThirdParty/stb/include/",
@@ -46,7 +46,7 @@ function AddSTB(isTarget)
     filter {}
 end
 
-function AddTinyObjLoader(isTarget)  
+function AddTinyObjLoader()  
     defines { "MODULE_TINYOBJLOADER", "TINYOBJLOADER_IMPLEMENTATION" }
     includedirs {
         "$(SolutionDir)/ThirdParty/tinyobjloader/include/",
@@ -55,3 +55,11 @@ function AddTinyObjLoader(isTarget)
     filter {}
 end
 
+function AddSpdlog()  
+    defines { "MODULE_SPDLOG" }
+    includedirs {
+        "$(SolutionDir)/ThirdParty/spdlog/include/",
+    } 
+        
+    filter {}
+end
