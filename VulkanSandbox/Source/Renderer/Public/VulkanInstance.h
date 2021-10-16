@@ -1,4 +1,7 @@
 #pragma once
+#include <vulkan/vulkan_core.h>
+#include <vulkan/vulkan_win32.h>
+
 #include "VulkanDebugUtils.h"
 
 /**
@@ -37,6 +40,11 @@ private:
     void SetupEnabledValidationLayers(VkInstanceCreateInfo& in_create_info, VkDebugUtilsMessengerCreateInfoEXT& in_debug_messenger_create_info);
 
     /**
+    *    If DEBUG_RENDER is defined, create a debug messenger, so any interesting messages are forwarded to our logging utility.
+    */
+    void SetupDebugMessenger();
+
+    /**
     *   Tell the driver which global extensions to enable.
     *   (Global extensions are extensions which are applied to the entire program instead of a specific device)
     *   Automatically adds VK_EXT_DEBUG_UTILS_EXTENSION_NAME to required extensions if in render debug configuration.
@@ -56,6 +64,8 @@ private:
     std::vector<VkExtensionProperties> supported_extensions_;
     std::vector<VkLayerProperties> supported_validation_layers_;
 
-    std::vector<const char*> required_extensions_ = { "VK_KHR_surface", "VK_KHR_win32_surface" }; // TODO: this should depend on the platform
+    std::vector<const char*> required_extensions_ = { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME }; // TODO: this should depend on the platform
     std::vector<const char*> required_validation_layers_;
+
+    VkDebugUtilsMessengerEXT debug_messenger_;
 };

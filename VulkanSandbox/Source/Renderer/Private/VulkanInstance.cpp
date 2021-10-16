@@ -1,5 +1,20 @@
 #include "VulkanInstance.h"
 
+#include "VulkanMacros.h"
+
+namespace 
+{
+    void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& in_debug_messenger_create_info)
+    {
+        in_debug_messenger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+        in_debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        in_debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+            VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+        in_debug_messenger_create_info.pfnUserCallback = VulkanDebugUtils::DebugCallback;
+    }
+}
+
 void VulkanInstance::Init()
 {
     VkInstanceCreateInfo create_info{};
@@ -23,11 +38,13 @@ void VulkanInstance::Init()
     SetupEnabledValidationLayers(create_info, debug_messenger_create_info);
     SetupEnabledExtensions(create_info);
 
-    if (vkCreateInstance(&create_info, nullptr, &instance_) != VK_SUCCESS)
+    if(vkCreateInstance(&create_info, nullptr, &instance_) != VK_SUCCESS)
     {
         LOG_ERROR("Failed to create Vulkan instance.");
         exit(EXIT_FAILURE);
     }
+
+    SetupDebugMessenger();
 }
 
 void VulkanInstance::Shutdown()
@@ -59,18 +76,28 @@ void VulkanInstance::SetupEnabledValidationLayers(VkInstanceCreateInfo& in_creat
     in_create_info.enabledLayerCount = static_cast<uint32_t>(required_validation_layers_.size());
     in_create_info.ppEnabledLayerNames = required_validation_layers_.data();
 
-    // Create an additional debug messenger which will automatically be used during vkCreateInstance and vkDestroyInstance and cleaned up after that.
-    in_debug_messenger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    in_debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    in_debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    in_debug_messenger_create_info.pfnUserCallback = VulkanDebugUtils::DebugCallback;
+    // We can't use the regular DebugMessenger, because it needs an initialized instance before it can be created.
+    // -> Create an additional debug messenger which will automatically be used during vkCreateInstance and vkDestroyInstance and cleaned up after that.
+    // See https://github.com/KhronosGroup/Vulkan-Docs/blob/master/appendices/VK_EXT_debug_utils.txt#L120
+    PopulateDebugMessengerCreateInfo(in_debug_messenger_create_info);
     in_debug_messenger_create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&in_debug_messenger_create_info;
 #else
     in_create_info.enabledLayerCount = 0;
     in_create_info.pNext = nullptr;
 #endif
+}
+
+void VulkanInstance::SetupDebugMessenger()
+{
+#ifdef _RENDER_DEBUG
+    VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info{};
+    PopulateDebugMessengerCreateInfo(debug_messenger_create_info);
+
+    // The debug messenger is an extension => We have to look up the address of the function ourselves
+    PFN_vkCreateDebugUtilsMessengerEXT CreateDebugMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT");
+    CHECK(CreateDebugMessenger != nullptr);
+    VERIFY_VK_RESULT(CreateDebugMessenger(instance_, &debug_messenger_create_info, nullptr, &debug_messenger_));
+#endif // _RENDER_DEBUG
 }
 
 void VulkanInstance::SetupEnabledExtensions(VkInstanceCreateInfo& in_create_info)
