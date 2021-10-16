@@ -24,7 +24,7 @@ workspace (ProjectName)
 	location "../"
 	basedir "../"
 	language "C++"
-	configurations {"Debug", "ReleaseWithDebugInfo", "Release"}
+	configurations {"Debug", "DebugRender", "ReleaseWithDebugInfo", "Release"}
 	platforms {"x64"}
 	warnings "default"
 	characterset ("MBCS")
@@ -40,13 +40,20 @@ workspace (ProjectName)
 		optimize "Off"
 		debugdir "$(SolutionDir)"
 
+	filter { "configurations:DebugRender" }
+		runtime "Debug"
+		defines { "_DEBUG", "_RENDER_DEBUG" }
+		symbols "On"
+		optimize "Off"
+		debugdir "$(SolutionDir)"
+
 	filter { "configurations:ReleaseWithDebugInfo" }
 		runtime "Release"
 		defines { "_RELEASE", "NDEBUG" }
 		symbols "On"
 		optimize "Full"
 		debugdir "$(SolutionDir)"
-		
+
 	filter { "configurations:Release" }
 	 	runtime "Release"
 		defines { "_RELEASE", "NDEBUG" }
