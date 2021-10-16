@@ -1938,8 +1938,7 @@ void VulkanRenderer::CreateTextureImage()
     CreateBuffer(tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
 
-    staging_buffer.Map(tex_size);
-    memcpy(staging_buffer.GetMapped(), tex_data, static_cast<size_t>(tex_size));
+    memcpy(staging_buffer.Map(tex_size), tex_data, static_cast<size_t>(tex_size));
     staging_buffer.Unmap();
 
     stbi_image_free(tex_data); // We copied the data, so we don't need this anymore.
@@ -2131,8 +2130,7 @@ void VulkanRenderer::CreateVertexBuffer()
 
     // Map allocated memory into CPU address space, copy over vertices to staging buffer
 
-    staging_buffer.Map(buffer_size);
-    memcpy(staging_buffer.GetMapped(), vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+    memcpy(staging_buffer.Map(buffer_size), vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
     staging_buffer.Unmap();
 
     vertex_buffer_.device_ = logical_device_;
@@ -2159,8 +2157,7 @@ void VulkanRenderer::CreateIndexBuffer()
     CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
 
-    staging_buffer.Map(buffer_size);
-    memcpy(staging_buffer.GetMapped(), indices_.data(), (size_t)buffer_size);
+    memcpy(staging_buffer.Map(buffer_size), indices_.data(), (size_t)buffer_size);
     staging_buffer.Unmap();
 
     index_buffer_.device_ = logical_device_;

@@ -7,13 +7,10 @@ struct Buffer
     VkDevice device_;
     VkDeviceMemory memory_handle_ = VK_NULL_HANDLE;
     VkBuffer buffer_handle_ = VK_NULL_HANDLE;
+    uint32_t size = 0;
     
     void Destroy();
     
-    VkResult Map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
-    void* GetMapped();
+    void* Map(VkDeviceSize size = VK_WHOLE_SIZE, VkDeviceSize offset = 0);
     void Unmap();
-    
-private:
-    void* mapped_addr_ = nullptr;
 };
