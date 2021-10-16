@@ -3,11 +3,8 @@
 #define GLFW_INCLUDE_VULKAN // GLFW will load vulkan.h
 #include <GLFW/glfw3.h>
 
-#include "KeyboardEventHandler.h"
 #include "Renderer.h"
 #include "TickTimer.h"
-#include "Window.h"
-#include "WindowEventHandler.h"
 
 class VulkanApplication
 {
