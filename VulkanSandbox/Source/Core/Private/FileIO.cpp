@@ -1,5 +1,7 @@
 #include "FileIO.h"
 
+#include <fstream>
+
 std::vector<char> FileIO::ReadFile(const std::string& filename)
 {
     // ate: Start reading at the end of the file -> we can use the read position to determine the file size and allocate a buffer
