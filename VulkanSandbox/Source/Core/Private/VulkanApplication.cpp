@@ -3,7 +3,10 @@
 void VulkanApplication::Run()
 {
     InitWindow();
-    Renderer_.Init(window_);
+
+    RHI_.Init();
+    renderer_.Init(&RHI_, window_);
+
     MainLoop();
     Cleanup();
 }
@@ -19,7 +22,8 @@ void VulkanApplication::InitWindow()
 
 void VulkanApplication::Cleanup()
 {
-    Renderer_.Cleanup();
+    renderer_.Cleanup();
+    RHI_.Shutdown();
 
     // Clean up glfw
     glfwDestroyWindow(window_);
@@ -31,7 +35,7 @@ void VulkanApplication::WindowResizeCallback(GLFWwindow* window, int width, int 
     // Have to use a static function here, because GLFW doesn't pass the pointer to our application.
     // However, glfw allows us to store our pointer with glfwSetWindowUserPointer. :) Yay.
     auto app = reinterpret_cast<VulkanApplication*>(glfwGetWindowUserPointer(window));
-    app->Renderer_.OnFrameBufferResize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+    app->renderer_.OnFrameBufferResize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 }
 
 void VulkanApplication::Update(float delta)
@@ -41,7 +45,7 @@ void VulkanApplication::Update(float delta)
 
 void VulkanApplication::Render()
 {
-    Renderer_.DrawFrame();
+    renderer_.DrawFrame();
 }
 
 void VulkanApplication::MainLoop()

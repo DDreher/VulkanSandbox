@@ -8,7 +8,7 @@
 
 #include "VulkanBuffer.h"
 #include "Vertex.h"
-#include "Buffer.h"
+#include "VulkanRHI.h"
 
 struct GLFWwindow;
 
@@ -49,20 +49,16 @@ struct SwapChainSupportDetails
 class VulkanRenderer
 {
 public:
-    void Init(GLFWwindow* window);
+    void Init(VulkanRHI* RHI, GLFWwindow* window);
     void OnFrameBufferResize(uint32_t width, uint32_t height);
     void DrawFrame();
     void Cleanup();
 
 private:
 
-    void CreateVulkanInstance();
-
     std::vector<const char*> GetRequiredExtensions();
 
     bool CheckInstanceExtensionSupport(const std::vector<const char*>& required_extensions);
-
-    void SetupDebugManager();
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
         const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
@@ -181,7 +177,6 @@ private:
     const std::string MODEL_PATH = "assets/models/viking_room.obj";
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
 
-    VkInstance instance_ = VK_NULL_HANDLE;  // The connection between the application and the Vulkan library
     VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;  // We do not have to clean this up manually
     VkDevice logical_device_ = VK_NULL_HANDLE;
@@ -233,8 +228,6 @@ private:
     std::vector<Vertex> vertices_;
     std::vector<uint32_t> indices_;
 
-    Buffer vertex_buffer_;
-    Buffer index_buffer_;
     VulkanBuffer vertex_buffer_;
     VulkanBuffer index_buffer_;
 
@@ -270,4 +263,6 @@ private:
 
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
+
+    VulkanRHI* RHI_ = nullptr;
 };

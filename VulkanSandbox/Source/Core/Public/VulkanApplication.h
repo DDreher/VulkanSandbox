@@ -5,6 +5,7 @@
 
 #include "Renderer.h"
 #include "TickTimer.h"
+#include "VulkanRHI.h"
 
 class VulkanApplication
 {
@@ -29,5 +30,7 @@ private:
     const uint32_t INITIAL_SCREEN_HEIGHT_ = 600;
 
     TickTimer tick_timer_;
-    VulkanRenderer Renderer_;
+
+    VulkanRHI RHI_;
+    VulkanRenderer renderer_;
 };

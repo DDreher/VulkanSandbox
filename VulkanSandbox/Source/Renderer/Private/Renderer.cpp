@@ -9,35 +9,7 @@
 #include <tiny_obj_loader.h>
 
 #include "FileIO.h"
-
-VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator,
-    VkDebugUtilsMessengerEXT* pDebugMessenger)
-{
-    // This is a proxy function encapsulating the creation process of a Vulkan debug utils messenger used to see validation layer outputs.
-    // In order to create the messenger we have to call vkCreateDebugUtilsMessengerEXT, which is an extension function 
-    // => We have to look up the address of this function ourselves.
-    auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
-    if (func != nullptr)
-    {
-        return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
-    }
-    else
-    {
-        // Function couldn't be loaded
-        return VK_ERROR_EXTENSION_NOT_PRESENT;
-    }
-}
-
-void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger, const VkAllocationCallbacks* allocator)
-{
-    // The VkDebugUtilsMessengerEXT object also needs to be cleaned up with a call to vkDestroyDebugUtilsMessengerEXT. 
-    // Similarly to vkCreateDebugUtilsMessengerEXT the function needs to be explicitly loaded.
-    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
-    if (func != nullptr)
-    {
-        func(instance, debug_messenger, allocator);
-    }
-}
+#include "VulkanRHI.h"
 
 void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
 {
@@ -46,21 +18,15 @@ void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
     framebuffer_height_ = height;
 }
 
-void VulkanRenderer::Init(GLFWwindow* window)
+void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
 {
-    assert(window != nullptr);
+    CHECK(window != nullptr);
+    RHI_ = RHI;
 
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
     framebuffer_width_ = static_cast<uint32_t>(width);
     framebuffer_width_ = static_cast<uint32_t>(height);
-
-    // The instance is the connection between the application and the Vulkan library. We also tell the driver some more information,
-    // e.g. what validation layers or extensions we need.
-    CreateVulkanInstance();
-
-    // Register our debug callback for validation layers.
-    SetupDebugManager();
 
     // A surface represents an abstract type to present rendered images to. The surface in our program will be backed by the window that we've already opened with GLFW.
     // We have to create a surface before we select the physical device to ensure that the device meets our requirements.
@@ -163,87 +129,7 @@ void VulkanRenderer::Cleanup()
 
     vkDestroyDevice(logical_device_, nullptr);
 
-    if (enable_validation_layers_)
-    {
-        DestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
-    }
-
-    vkDestroySurfaceKHR(instance_, surface_, nullptr);
-    vkDestroyInstance(instance_, nullptr);
-}
-
-void VulkanRenderer::CreateVulkanInstance()
-{
-    if (enable_validation_layers_ && CheckValidationLayerSupport() == false)
-    {
-        throw std::runtime_error("Required extension not supported!");
-    }
-
-    // This is optional, but may provide crucial information to the graphics driver to optimize the application.
-    // E.g. we could provide information about our well-known engine (Unity, Unreal,...) which the driver knows about.
-    VkApplicationInfo app_info{};
-    app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    app_info.pApplicationName = "Hello Triangle";
-    app_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.pEngineName = "No Engine";
-    app_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    app_info.apiVersion = VK_API_VERSION_1_0;
-
-    VkInstanceCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    create_info.pApplicationInfo = &app_info;
-
-    // Tell the driver which global validation layers to enable
-    VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info;
-    if (enable_validation_layers_)
-    {
-        create_info.enabledLayerCount = static_cast<uint32_t>(valiation_layers_.size());
-        create_info.ppEnabledLayerNames = valiation_layers_.data();
-
-        // Create an additional debug messenger which will automatically be used during vkCreateInstance and vkDestroyInstance and cleaned up after that.
-        PopulateDebugMessengerCreateInfo(debug_messenger_create_info);
-        create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debug_messenger_create_info;
-    }
-    else
-    {
-        create_info.enabledLayerCount = 0;
-        create_info.pNext = nullptr;
-    }
-
-    // Tell the driver which global extensions are used.
-    // Global extensions are extensions which are applied to the entire program instead of a specific device.
-    std::vector<const char*> extensions = GetRequiredExtensions();
-    if (CheckInstanceExtensionSupport(extensions))
-    {
-        create_info.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-        create_info.ppEnabledExtensionNames = extensions.data();
-    }
-    else
-    {
-        throw std::runtime_error("Required extension not supported!");
-    }
-
-    if (vkCreateInstance(&create_info, nullptr, &instance_) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create Vulkan instance!");
-    }
-}
-
-std::vector<const char*> VulkanRenderer::GetRequiredExtensions()
-{
-    // glfw extensions already include the platform specific extensions which are required
-    // e.g. VK_KHR_win32_surface
-    uint32_t glfw_extension_count;
-    const char** glfw_extensions;
-    glfw_extensions = glfwGetRequiredInstanceExtensions(&glfw_extension_count);
-    std::vector<const char*> extensions(glfw_extensions, glfw_extensions + glfw_extension_count);
-
-    if (enable_validation_layers_)
-    {
-        extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-    }
-
-    return extensions;
+    vkDestroySurfaceKHR(RHI_->GetInstance().GetHandle(), surface_, nullptr);
 }
 
 bool VulkanRenderer::CheckInstanceExtensionSupport(const std::vector<const char*>& required_extensions)
@@ -287,21 +173,6 @@ bool VulkanRenderer::CheckInstanceExtensionSupport(const std::vector<const char*
     return true;
 }
 
-void VulkanRenderer::SetupDebugManager()
-{
-    // Tell Vulkan about our debug callback function in case we use a validation layer.
-    if (enable_validation_layers_)
-    {
-        VkDebugUtilsMessengerCreateInfoEXT create_info{};
-        PopulateDebugMessengerCreateInfo(create_info);
-
-        if (CreateDebugUtilsMessengerEXT(instance_, &create_info, nullptr, &debug_messenger_) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to set up debug messenger!");
-        }
-    }
-}
-
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
     std::cerr << "Validation layer: " << callback_data->pMessage << std::endl;
@@ -318,7 +189,7 @@ void VulkanRenderer::CreateSurface(GLFWwindow* window)
     // glfw offers a handy abstraction for surface creation.
     // It automatically fills a VkWin32SurfaceCreateInfoKHR struct with the platform specific window and process handles
     // and then calls the platform specific function to create the surface, e.g. vkCreateWin32SurfaceKHR
-    if (glfwCreateWindowSurface(instance_, window, nullptr, &surface_) != VK_SUCCESS)
+    if (glfwCreateWindowSurface(RHI_->GetInstance().GetHandle(), window, nullptr, &surface_) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create window surface!");
     }
@@ -327,7 +198,7 @@ void VulkanRenderer::CreateSurface(GLFWwindow* window)
 void VulkanRenderer::SelectPhysicalDevice()
 {
     uint32_t device_count = 0;
-    vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
+    vkEnumeratePhysicalDevices(RHI_->GetInstance().GetHandle(), &device_count, nullptr);
 
     if (device_count == 0)
     {
@@ -335,7 +206,7 @@ void VulkanRenderer::SelectPhysicalDevice()
     }
 
     std::vector<VkPhysicalDevice> found_devices(device_count);
-    vkEnumeratePhysicalDevices(instance_, &device_count, found_devices.data());
+    vkEnumeratePhysicalDevices(RHI_->GetInstance().GetHandle(), &device_count, found_devices.data());
 
     for (const auto& device : found_devices)
     {
