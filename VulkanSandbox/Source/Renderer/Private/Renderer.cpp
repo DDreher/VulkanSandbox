@@ -1933,7 +1933,7 @@ void VulkanRenderer::CreateTextureImage()
     // Add 1 so that we have at least one mip level
 
     // First copy to a staging buffer
-    Buffer staging_buffer;
+    VulkanBuffer staging_buffer;
     staging_buffer.device_ = logical_device_;
     CreateBuffer(tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
@@ -2115,7 +2115,7 @@ void VulkanRenderer::CreateVertexBuffer()
     // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
     // To copy to device local memory we therefore can't use vkMapMemory.
     // Instead we have to specify the VK_BUFFER_USAGE_TRANSFER_SRC_BIT or VK_BUFFER_USAGE_TRANSFER_DST_BIT properties.
-    Buffer staging_buffer;
+    VulkanBuffer staging_buffer;
     staging_buffer.device_ = logical_device_;
     CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
         staging_buffer.buffer_handle_, staging_buffer.memory_handle_);
@@ -2152,7 +2152,7 @@ void VulkanRenderer::CreateIndexBuffer()
 
     VkDeviceSize buffer_size = sizeof(indices_[0]) * indices_.size();
 
-    Buffer staging_buffer;
+    VulkanBuffer staging_buffer;
     staging_buffer.device_ = logical_device_;
     CreateBuffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         staging_buffer.buffer_handle_, staging_buffer.memory_handle_);

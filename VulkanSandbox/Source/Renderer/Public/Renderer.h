@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
 
+#include "VulkanBuffer.h"
 #include "Vertex.h"
 #include "Buffer.h"
 
@@ -234,6 +235,8 @@ private:
 
     Buffer vertex_buffer_;
     Buffer index_buffer_;
+    VulkanBuffer vertex_buffer_;
+    VulkanBuffer index_buffer_;
 
     std::vector<VkBuffer> uniform_buffers_;
     std::vector<VkDeviceMemory> uniform_buffers_memory_;    // Array, because we need one uniform buffer per swap chain image!
