@@ -45,6 +45,11 @@ private:
     void SetupDebugMessenger();
 
     /**
+    *    If DEBUG_RENDER is defined, destroy the debug messenger.
+    */
+    void DestroyDebugMessenger();
+
+    /**
     *   Tell the driver which global extensions to enable.
     *   (Global extensions are extensions which are applied to the entire program instead of a specific device)
     *   Automatically adds VK_EXT_DEBUG_UTILS_EXTENSION_NAME to required extensions if in render debug configuration.

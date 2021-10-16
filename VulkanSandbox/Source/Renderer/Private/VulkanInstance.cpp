@@ -13,6 +13,25 @@ namespace
             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         in_debug_messenger_create_info.pfnUserCallback = VulkanDebugUtils::DebugCallback;
     }
+
+    VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* create_info, const VkAllocationCallbacks* allocator,
+        VkDebugUtilsMessengerEXT* debug_messenger)
+    {
+        // This is a proxy function encapsulating the creation process of a Vulkan debug utils messenger used to see validation layer outputs.
+        // In order to create the messenger we have to call vkCreateDebugUtilsMessengerEXT, which is an extension function 
+        // => We have to look up the address of this function ourselves.
+        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        CHECK_MSG(func != nullptr, "Failed to look up function address of vkCreateDebugUtilsMessengerEXT");
+        return func(instance, create_info, allocator, debug_messenger);
+    }
+
+    void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debug_messenger, const VkAllocationCallbacks* allocator)
+    {
+        // Proxy function, encapsulating vkDestroyDebugUtilsMessengerEXT. 
+        auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+        CHECK_MSG(func != nullptr, "Failed to look up function address of vkCreateDebugUtilsMessengerEXT");
+        func(instance, debug_messenger, allocator);
+    }
 }
 
 void VulkanInstance::Init()
@@ -50,6 +69,8 @@ void VulkanInstance::Init()
 void VulkanInstance::Shutdown()
 {
     CHECK(instance_ != VK_NULL_HANDLE);
+
+    DestroyDebugMessenger();
     vkDestroyInstance(instance_, nullptr);
 }
 
@@ -94,9 +115,15 @@ void VulkanInstance::SetupDebugMessenger()
     PopulateDebugMessengerCreateInfo(debug_messenger_create_info);
 
     // The debug messenger is an extension => We have to look up the address of the function ourselves
-    PFN_vkCreateDebugUtilsMessengerEXT CreateDebugMessenger = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance_, "vkCreateDebugUtilsMessengerEXT");
-    CHECK(CreateDebugMessenger != nullptr);
-    VERIFY_VK_RESULT(CreateDebugMessenger(instance_, &debug_messenger_create_info, nullptr, &debug_messenger_));
+    VERIFY_VK_RESULT(CreateDebugUtilsMessengerEXT(instance_, &debug_messenger_create_info, nullptr, &debug_messenger_));
+#endif // _RENDER_DEBUG
+}
+
+void VulkanInstance::DestroyDebugMessenger()
+{
+#ifdef _RENDER_DEBUG
+    CHECK(debug_messenger_ != VK_NULL_HANDLE);
+    DestroyDebugUtilsMessengerEXT(instance_, debug_messenger_, nullptr);
 #endif // _RENDER_DEBUG
 }
 
