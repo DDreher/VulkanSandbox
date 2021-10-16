@@ -2,17 +2,10 @@
 
 int main()
 {
-    VulkanApplication app;
+    Log::Init();
 
-    try
-    {
-        app.Run();
-    }
-    catch (const std::exception & e)
-    {
-        std::cerr << e.what() << std::endl;
-        return EXIT_FAILURE;
-    }
+    VulkanApplication app;
+    app.Run();
 
     return EXIT_SUCCESS;
 }
