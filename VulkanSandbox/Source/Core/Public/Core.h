@@ -1,16 +1,6 @@
-#include <algorithm>
-#include <array>
-#include <cstdint>
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <optional>
-#include <set>
-#include <stdexcept>
-#include <unordered_map>
-#include <vector>
-
+// -----------------
+// Includes
+// -----------------
+#include "AssertMacros.h"
+#include "CoreTypes.h"
 #include "Log.h"
-
-// Logging
-#define LOG(...) Log::PrintLine(__VA_ARGS__)
