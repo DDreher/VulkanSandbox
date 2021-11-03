@@ -251,18 +251,6 @@ void VulkanDevice::CreateLogicalDevice()
     transfer_queue_ = new VulkanQueue(this, transfer_queue_family_idx);
 }
 
-bool VulkanDevice::AreExtensionsSupported(const std::vector<const char*>& extensions_to_check) const
-{
-    CHECK(device_extensions_.size() > 0); // We definitely should have acquired supported extensions by the time this is called
-    std::set<std::string> extensions(extensions_to_check.begin(), extensions_to_check.end());
-    for (const auto& extension : device_extensions_)
-    {
-        extensions.erase(extension);
-    }
-
-    return extensions.empty();
-}
-
 void VulkanDevice::WaitUntilIdle()
 {
     CHECK(logical_device_ != VK_NULL_HANDLE);

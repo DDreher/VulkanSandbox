@@ -104,8 +104,6 @@ public:
     }
 
     // GPU Info
-    std::vector<const char*> device_extensions_;
-    std::vector<const char*> device_layers_;
     std::vector<VkQueueFamilyProperties> queue_family_properties_;
 
 private:
