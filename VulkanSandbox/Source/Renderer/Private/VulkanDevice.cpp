@@ -308,7 +308,7 @@ std::vector<const char*> VulkanDevice::GetRequiredValidationLayers() const
 
 #ifdef _RENDER_DEBUG
     // If debugging, we add the standard khronos validation layers
-    required_layers.push_back(KHRONOS_VALIDATION_LAYER_NAME));
+    required_layers.push_back(KHRONOS_VALIDATION_LAYER_NAME);
 #endif // _RENDER_DEBUG
 
     return required_layers;
