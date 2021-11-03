@@ -48,6 +48,8 @@ public:
     }
 
 private:
+    void SelectAndInitDevice();
+
     VulkanInstance instance_;
     
     std::vector<char*> instance_extensions_;
@@ -55,6 +57,4 @@ private:
 
     std::vector<VulkanDevice*> found_devices_;
     VulkanDevice* device_ = nullptr;
-
-    void SelectAndInitDevice();
 };

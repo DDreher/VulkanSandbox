@@ -4,14 +4,6 @@
 class VulkanRHI;
 class VulkanQueue;
 
-struct QueueFamilyIndices
-{
-    int32 graphics_family = -1;
-    int32 present_family = -1;
-    int32 transfer_family = -1;
-    int32 compute_family = -1;
-};
-
 struct DeviceCreationProperties
 {
     VkPhysicalDeviceFeatures features;  // Features that should be enabled
@@ -64,17 +56,6 @@ public:
     bool AreExtensionsSupported(const std::vector<const char*>& extensions) const;
 
     /**
-    * Try to find queue family indices for graphics, present, transfer and compute queue family. 
-    * Indices of different queue families may overlap.
-    * The graphics queue family preferably also supports presenting. Otherwise search for a dedicated present family.
-    * Transfer and compute queue families are preferably dedicated.
-    * 
-    * @param surface The surface to check for swapchain support if required
-    * @return QueueFamilyIndices struct wrapping the found indices.
-    */
-    QueueFamilyIndices FindQueueFamilies(VkSurfaceKHR surface) const;
-
-    /**
     *    Wrapper around vkDeviceWaitIdle.
     */
     void WaitUntilIdle();
@@ -84,13 +65,35 @@ public:
         return physical_device_;
     }
 
+    const VkPhysicalDeviceProperties& GetPhysicalDeviceProperties() const
+    {
+        return physical_device_properties_;
+    }
+
+    VulkanQueue* GetGraphicsQueue()
+    {
+        return graphics_queue_;
+    }
+
+    VulkanQueue* GetComputeQueue()
+    {
+        return compute_queue_;
+    }
+
+    VulkanQueue* GetTransferQueue()
+    {
+        return transfer_queue_;
+    }
+
+    VulkanQueue* GetPresentQueue()
+    {
+        return present_queue_;
+    }
+
     VkDevice GetLogicalDeviceHandle() const
     {
         return logical_device_;
     }
-
-    // Infos for supported queue families
-    QueueFamilyIndices queue_family_indices_;
 
     // GPU Info
     std::vector<const char*> device_extensions_;
@@ -105,17 +108,17 @@ private:
     int32 device_idx_ = -1;
     bool is_discrete_ = false;
 
-    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;
+    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE; // We do not have to clean this up manually
     VkPhysicalDeviceProperties physical_device_properties_{};  // basic details, e.g. name, type and supported Vulkan version
     VkPhysicalDeviceFeatures physical_device_features_{};   // supported optional features, e.g. texture compression,
                                                             // 64 bit floats and multi viewport rendering (useful for VR)
-    std::vector<const char*> supported_extensions_;
-    std::vector<const char*> supported_validation_layers_;
+    std::vector<VkExtensionProperties> supported_extensions_;
+    std::vector<VkLayerProperties> supported_validation_layers_;
 
     VkDevice logical_device_ = VK_NULL_HANDLE;
 
-    VulkanQueue* GfxQueue = nullptr;
-    VulkanQueue* ComputeQueue = nullptr;
-    VulkanQueue* TransferQueue = nullptr;
-    VulkanQueue* PresentQueue = nullptr;
+    VulkanQueue* graphics_queue_ = nullptr;
+    VulkanQueue* compute_queue_ = nullptr;
+    VulkanQueue* transfer_queue_ = nullptr;
+    VulkanQueue* present_queue_ = nullptr;
 };

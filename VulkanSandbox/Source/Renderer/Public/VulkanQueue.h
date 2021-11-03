@@ -27,7 +27,7 @@ public:
     }
 
 private:
-    VkQueue queue_handle_ = VK_NULL_HANDLE;
+    VkQueue queue_handle_ = VK_NULL_HANDLE; // We do not have to clean this up manually, clean up of logical device takes care of this.
     uint32 family_idx_ = 0;
     uint32 queue_idx_ = 0;
     VulkanDevice* device_ = nullptr;

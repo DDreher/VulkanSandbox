@@ -2,7 +2,7 @@
 
 struct VulkanUtils
 {
-    static bool IsInList(const char* s, const std::vector<const char*> l)
+    static bool IsInList(const char* s, const std::vector<const char*>& l)
     {
         for(const auto entry : l)
         {
@@ -16,7 +16,7 @@ struct VulkanUtils
         return false;
     }
 
-    static bool IsListSubset(const std::vector<const char*> l, const std::vector<const char*> subset_list)
+    static bool IsListSubset(const std::vector<const char*>& l, const std::vector<const char*>& subset_list)
     {
         for (const char* entry : subset_list)
         {

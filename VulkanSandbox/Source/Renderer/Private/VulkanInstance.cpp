@@ -135,7 +135,7 @@ void VulkanInstance::SetupEnabledExtensions(VkInstanceCreateInfo& in_create_info
 
     if (AreExtensionsSupport())
     {
-        LOG("Enabled extenstions: ");
+        LOG("Enabled extensions: ");
         for(const char* ext : required_extensions_)
         {
             LOG("- {}", ext);

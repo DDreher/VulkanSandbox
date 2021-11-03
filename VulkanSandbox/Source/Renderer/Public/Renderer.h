@@ -65,17 +65,7 @@ private:
 
     void CreateSurface(GLFWwindow* window);
 
-    void SelectPhysicalDevice();
-
-    bool CheckDeviceRequirements(VkPhysicalDevice device);
-
-    bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
-
-    QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
-
     SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-
-    void CreateLogicalDevice();
 
     void CreateSwapChain();
 
@@ -178,8 +168,6 @@ private:
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
 
     VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
-    VkPhysicalDevice physical_device_ = VK_NULL_HANDLE;  // We do not have to clean this up manually
-    VkDevice logical_device_ = VK_NULL_HANDLE;
 
     const std::vector<const char*> valiation_layers_ = { "VK_LAYER_KHRONOS_validation" };
 #ifdef NDEBUG
@@ -192,8 +180,6 @@ private:
                                                                                                 // but being explicit is good practice. Also we have to explicitly enable the extension
                                                                                                 // anyway...
 
-    VkQueue graphics_queue_ = VK_NULL_HANDLE;   // We do not have to clean this up manually, clean up of logical device takes care of this.
-    VkQueue present_queue_ = VK_NULL_HANDLE;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
     VkSwapchainKHR swap_chain_ = VK_NULL_HANDLE;

@@ -1,7 +1,10 @@
 #include "VulkanDevice.h"
 
-#include "VulkanRHI.h"
+#include "VulkanDefines.h"
 #include "VulkanMacros.h"
+#include "VulkanPlatform.h"
+#include "VulkanQueue.h"
+#include "VulkanRHI.h"
 #include "VulkanUtils.h"
 
 VulkanDevice::VulkanDevice(VulkanRHI* RHI, VkPhysicalDevice physical_device, int32 device_idx)
@@ -18,6 +21,15 @@ VulkanDevice::~VulkanDevice()
 void VulkanDevice::Destroy()
 {
     WaitUntilIdle();
+
+    delete graphics_queue_;
+    graphics_queue_ = nullptr;
+    delete transfer_queue_;
+    transfer_queue_ = nullptr;
+    delete compute_queue_;
+    compute_queue_ = nullptr;
+    delete present_queue_;
+    present_queue_ = nullptr;
 
     CHECK(logical_device_ != VK_NULL_HANDLE);
     vkDestroyDevice(logical_device_, nullptr);
@@ -54,10 +66,12 @@ void VulkanDevice::QueryGPUInfo()
         break;
     }
 
-    LOG("Found Device {}: {}", device_idx_, physical_device_properties_.deviceName);
+    LOG("Device {}: {}", device_idx_, physical_device_properties_.deviceName);
     LOG("- Type: {}", device_type);
-    LOG("- API: {}.{}.{}, Driver: {} VendorId: {}", VK_VERSION_MAJOR(physical_device_properties_.apiVersion),
-        VK_VERSION_MINOR(physical_device_properties_.apiVersion), VK_VERSION_PATCH(physical_device_properties_.apiVersion));
+    LOG("- API: {}.{}.{}",
+        VK_VERSION_MAJOR(physical_device_properties_.apiVersion),
+        VK_VERSION_MINOR(physical_device_properties_.apiVersion),
+        VK_VERSION_PATCH(physical_device_properties_.apiVersion));
 
     uint32_t queue_family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(physical_device_, &queue_family_count, nullptr);
@@ -70,28 +84,16 @@ void VulkanDevice::QuerySupportedDeviceExtensions()
 {
     uint32 count = 0;
     vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &count, nullptr);
-    std::vector<VkExtensionProperties> props(count);
-    vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &count, props.data());
-
     supported_extensions_.resize(count);
-    for(const auto& p : props)
-    {
-        supported_extensions_.push_back(p.extensionName);
-    }
+    vkEnumerateDeviceExtensionProperties(physical_device_, nullptr, &count, supported_extensions_.data());
 }
 
 void VulkanDevice::QuerySupportedDeviceValidationLayers()
 {
     uint32 count = 0;
     vkEnumerateDeviceLayerProperties(physical_device_, &count, nullptr);
-    std::vector<VkLayerProperties> props(count);
-    vkEnumerateDeviceLayerProperties(physical_device_, &count, nullptr);
-
     supported_validation_layers_.resize(count);
-    for (const auto& p : props)
-    {
-        supported_validation_layers_.push_back(p.layerName);
-    }
+    vkEnumerateDeviceLayerProperties(physical_device_, &count, supported_validation_layers_.data());
 }
 
 void VulkanDevice::CreateLogicalDevice()
@@ -119,7 +121,13 @@ void VulkanDevice::CreateLogicalDevice()
 
     // Set up extensions 
     std::vector<const char*> required_extensions = GetRequiredExtensions();
-    bool are_required_extensions_supported = VulkanUtils::IsListSubset(supported_extensions_, required_extensions);
+    std::vector<const char*> supported_extensions_char_ptrs;
+    for (const VkExtensionProperties& ext_prop : supported_extensions_)
+    {
+        supported_extensions_char_ptrs.push_back(ext_prop.extensionName);
+    }
+
+    bool are_required_extensions_supported = VulkanUtils::IsListSubset(supported_extensions_char_ptrs, required_extensions);
     if (are_required_extensions_supported == false)
     {
         LOG_ERROR("Failed to create Vulkan device: Not all required extensions supported!");
@@ -130,7 +138,13 @@ void VulkanDevice::CreateLogicalDevice()
 
     // Set up validation layers
     std::vector<const char*> required_layers = GetRequiredValidationLayers();
-    bool are_required_layers_supported = VulkanUtils::IsListSubset(supported_validation_layers_, required_layers);
+    std::vector<const char*> supported_layers_char_ptrs;
+    for(const VkLayerProperties& layer_prop : supported_validation_layers_)
+    {
+        supported_layers_char_ptrs.push_back(layer_prop.layerName);
+    }
+
+    bool are_required_layers_supported = VulkanUtils::IsListSubset(supported_layers_char_ptrs, required_layers);
     if (are_required_layers_supported == false)
     {
         LOG_ERROR("Failed to create Vulkan device: Not all required validation layers supported!");
@@ -217,7 +231,24 @@ void VulkanDevice::CreateLogicalDevice()
         LOG("- {}", extension);
     }
 
-    // TODO: Create VulkanQueue objects
+    // Wrap the Vulkan queues
+    graphics_queue_ = new VulkanQueue(this, graphics_queue_family_idx);
+    
+    bool found_dedicated_compute_queue = compute_queue_family_idx != -1;
+    if(!found_dedicated_compute_queue)
+    {
+        // Use default queue
+        compute_queue_family_idx = graphics_queue_family_idx;
+    }
+    compute_queue_ = new VulkanQueue(this, compute_queue_family_idx);
+
+    bool found_dedicated_transfer_queue = transfer_queue_family_idx != -1;
+    if(!found_dedicated_transfer_queue)
+    {
+        // Use default queue
+        transfer_queue_family_idx = compute_queue_family_idx;
+    }
+    transfer_queue_ = new VulkanQueue(this, transfer_queue_family_idx);
 }
 
 bool VulkanDevice::AreExtensionsSupported(const std::vector<const char*>& extensions_to_check) const
@@ -240,7 +271,9 @@ void VulkanDevice::WaitUntilIdle()
 
 std::vector<const char*> VulkanDevice::GetRequiredExtensions() const
 {
-    std::vector<const char*> required_extensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+    std::vector<const char*> required_extensions;
+    VulkanPlatform::GetDeviceExtensions(required_extensions);
+    required_extensions.push_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
     return required_extensions;
 }
@@ -251,7 +284,7 @@ std::vector<const char*> VulkanDevice::GetRequiredValidationLayers() const
 
 #ifdef _RENDER_DEBUG
     // If debugging, we add the standard khronos validation layers
-    required_layers.push_back("VK_LAYER_KHRONOS_validation");
+    required_layers.push_back(KHRONOS_VALIDATION_LAYER_NAME));
 #endif // _RENDER_DEBUG
 
     return required_layers;
