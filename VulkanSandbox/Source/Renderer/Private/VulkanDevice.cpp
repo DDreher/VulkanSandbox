@@ -178,7 +178,7 @@ void VulkanDevice::CreateLogicalDevice()
         if (properties.queueFlags & VK_QUEUE_COMPUTE_BIT)
         {
             // Prefer non-graphics compute queue
-            if (compute_queue_family_idx == -1 && graphics_queue_family_idx != compute_queue_family_idx)
+            if (compute_queue_family_idx == -1 && graphics_queue_family_idx != i)
             {
                 compute_queue_family_idx = i;
                 is_queue_family_used = true;
@@ -267,6 +267,42 @@ void VulkanDevice::WaitUntilIdle()
 {
     CHECK(logical_device_ != VK_NULL_HANDLE);
     vkDeviceWaitIdle(logical_device_);
+}
+
+void VulkanDevice::InitPresentQueue(VkSurfaceKHR surface)
+{
+    CHECK(present_queue_ == nullptr);
+    CHECK(physical_device_ != VK_NULL_HANDLE);
+
+    VkBool32 is_present_supported;
+
+    // For now we simply check the already existing queues for present support
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, graphics_queue_->GetFamilyIndex(), surface, &is_present_supported));
+    if(is_present_supported == VK_SUCCESS)
+    {
+        present_queue_ = graphics_queue_;
+        LOG("Using graphics queue as present queue");
+        return;
+    }
+
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, compute_queue_->GetFamilyIndex(), surface, &is_present_supported));
+    if (is_present_supported == VK_SUCCESS)
+    {
+        present_queue_ = compute_queue_;
+        LOG("Using graphics queue as present queue");
+        return;
+    }
+
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, transfer_queue_->GetFamilyIndex(), surface, &is_present_supported));
+    if (is_present_supported == VK_SUCCESS)
+    {
+        present_queue_ = transfer_queue_;
+        LOG("Using transfer queue as present queue");
+        return;
+    }
+
+    LOG_ERROR("Could not find a present queue");
+    exit(EXIT_FAILURE);
 }
 
 std::vector<const char*> VulkanDevice::GetRequiredExtensions() const

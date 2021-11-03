@@ -60,6 +60,14 @@ public:
     */
     void WaitUntilIdle();
 
+    /**
+    * Set up the present queue.
+    * This is done separatly, as we need access to the surface before we can check the present support.
+    * 
+    * @param surface Handle to the surface.
+    */
+    void InitPresentQueue(VkSurfaceKHR surface);
+
     VkPhysicalDevice GetPhysicalDeviceHandle() const
     {
         return physical_device_;
