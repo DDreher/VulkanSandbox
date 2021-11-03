@@ -220,13 +220,13 @@ void VulkanDevice::CreateLogicalDevice()
     }
 
     LOG("Using device layers:");
-    for (const char* layer : device_layers_)
+    for (const char* layer : required_layers)
     {
         LOG("- {}", layer);
     }
 
     LOG("Using device extensions:");
-    for (const char* extension : device_extensions_)
+    for (const char* extension : required_extensions)
     {
         LOG("- {}", extension);
     }
