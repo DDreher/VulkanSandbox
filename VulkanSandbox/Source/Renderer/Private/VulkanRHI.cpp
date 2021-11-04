@@ -17,9 +17,14 @@ void VulkanRHI::Init()
 
 void VulkanRHI::Shutdown()
 {
-    CHECK(device_ != nullptr);
-    device_->Destroy();
-    delete device_;
+    for(VulkanDevice* device : found_devices_)
+    {
+        CHECK(device != nullptr);
+        device->Destroy();
+        delete device;
+        device = nullptr;
+    }
+    found_devices_.clear();
     device_ = nullptr;
 
     instance_.Shutdown();
@@ -55,6 +60,7 @@ void VulkanRHI::SelectAndInitDevice()
     if(device_ == nullptr)
     {
         // As a last resort we'll just use the first GPU we found.
+        LOG_WARN("Could not find discrete GPU! Using any other GPU instead.");
         device_ = found_devices_[0];
     }
 
