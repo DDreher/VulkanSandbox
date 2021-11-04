@@ -155,55 +155,43 @@ void VulkanDevice::CreateLogicalDevice()
 
     // Set up queues
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
-    int32 graphics_queue_family_idx = -1;
-    int32 compute_queue_family_idx = -1;
-    int32 transfer_queue_family_idx = -1;
+    uint32_t requested_queue_families = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+    QueueFamilyIndices queue_family_indices = GetQueueFamilyIndices(requested_queue_families);
 
-    for(int32 i = 0; i < queue_family_properties_.size(); ++i)
+    static const float default_queue_priority = 0.0f;    // Queue priorities [0.0f, 1.0f] influence the scheduling of command buffer execution.
+
+    if(requested_queue_families & VK_QUEUE_GRAPHICS_BIT)
     {
-        bool is_queue_family_used = false;
-        const VkQueueFamilyProperties& properties = queue_family_properties_[i];
+        VkDeviceQueueCreateInfo queue_create_info{};
+        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_create_info.queueFamilyIndex = queue_family_indices.graphics;
+        queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple threads and submit them all at once.
+        queue_create_info.pQueuePriorities = &default_queue_priority;
+        queue_create_infos.push_back(queue_create_info);
+    }
 
-        // Note: the graphics queue family does not necessarily support presenting to a surface...
-        // to keep the code simple we neglect this for now.
-        if(properties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+    if (requested_queue_families & VK_QUEUE_COMPUTE_BIT)
+    {
+        if(queue_family_indices.compute != queue_family_indices.graphics)
         {
-            if(graphics_queue_family_idx == -1)
-            {
-                graphics_queue_family_idx = i;
-                is_queue_family_used = true;
-            }
-        }
-
-        if (properties.queueFlags & VK_QUEUE_COMPUTE_BIT)
-        {
-            // Prefer non-graphics compute queue
-            if (compute_queue_family_idx == -1 && graphics_queue_family_idx != i)
-            {
-                compute_queue_family_idx = i;
-                is_queue_family_used = true;
-            }
-        }
-
-        if (properties.queueFlags & VK_QUEUE_TRANSFER_BIT)
-        {
-            // Prefer dedicated transfer queue
-            if (transfer_queue_family_idx == -1 && !(properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) && !(properties.queueFlags & VK_QUEUE_COMPUTE_BIT))
-            {
-                transfer_queue_family_idx = i;
-                is_queue_family_used = true;
-            }
-        }
-
-        if(is_queue_family_used)
-        {
-            // TODO: Is this correct?
-            float queue_priority = 1.0f;    // Queue priorities [0.0f, 1.0f] influence the scheduling of command buffer execution.
             VkDeviceQueueCreateInfo queue_create_info{};
             queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-            queue_create_info.queueFamilyIndex = i;
+            queue_create_info.queueFamilyIndex = queue_family_indices.compute;
             queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple threads and submit them all at once.
-            queue_create_info.pQueuePriorities = &queue_priority;
+            queue_create_info.pQueuePriorities = &default_queue_priority;
+            queue_create_infos.push_back(queue_create_info);
+        }
+    }
+
+    if (requested_queue_families & VK_QUEUE_TRANSFER_BIT)
+    {
+        if (queue_family_indices.transfer != queue_family_indices.graphics && queue_family_indices.transfer != queue_family_indices.compute)
+        {
+            VkDeviceQueueCreateInfo queue_create_info{};
+            queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+            queue_create_info.queueFamilyIndex = queue_family_indices.transfer;
+            queue_create_info.queueCount = 1;   // We only need one queue, because we can create command buffers on multiple threads and submit them all at once.
+            queue_create_info.pQueuePriorities = &default_queue_priority;
             queue_create_infos.push_back(queue_create_info);
         }
     }
@@ -213,6 +201,12 @@ void VulkanDevice::CreateLogicalDevice()
 
     VkResult result = vkCreateDevice(physical_device_, &device_create_info, nullptr, &logical_device_);
     VERIFY_VK_RESULT(result);
+
+    // Wrap the Vulkan queues
+    graphics_queue_ = new VulkanQueue(this, queue_family_indices.graphics);
+    compute_queue_ = new VulkanQueue(this, queue_family_indices.compute);
+    transfer_queue_ = new VulkanQueue(this, queue_family_indices.transfer);
+
     if(result == VK_ERROR_INITIALIZATION_FAILED)
     {
         LOG_ERROR("Failed to initialize logical device.");
@@ -230,25 +224,6 @@ void VulkanDevice::CreateLogicalDevice()
     {
         LOG("- {}", extension);
     }
-
-    // Wrap the Vulkan queues
-    graphics_queue_ = new VulkanQueue(this, graphics_queue_family_idx);
-    
-    bool found_dedicated_compute_queue = compute_queue_family_idx != -1;
-    if(!found_dedicated_compute_queue)
-    {
-        // Use default queue
-        compute_queue_family_idx = graphics_queue_family_idx;
-    }
-    compute_queue_ = new VulkanQueue(this, compute_queue_family_idx);
-
-    bool found_dedicated_transfer_queue = transfer_queue_family_idx != -1;
-    if(!found_dedicated_transfer_queue)
-    {
-        // Use default queue
-        transfer_queue_family_idx = compute_queue_family_idx;
-    }
-    transfer_queue_ = new VulkanQueue(this, transfer_queue_family_idx);
 }
 
 void VulkanDevice::WaitUntilIdle()
@@ -312,4 +287,62 @@ std::vector<const char*> VulkanDevice::GetRequiredValidationLayers() const
 #endif // _RENDER_DEBUG
 
     return required_layers;
+}
+
+QueueFamilyIndices VulkanDevice::GetQueueFamilyIndices(uint32_t requested_family_flags) const
+{
+    QueueFamilyIndices indices;
+
+    // Find dedicated compute queue family
+    if (requested_family_flags & VK_QUEUE_COMPUTE_BIT)
+    {
+        for (int32 i = 0; i < queue_family_properties_.size(); ++i)
+        {
+            const VkQueueFamilyProperties& properties = queue_family_properties_[i];
+            if ((properties.queueFlags & VK_QUEUE_COMPUTE_BIT) && (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0)
+            {
+                indices.compute = i;
+            }
+        }
+    }
+
+    // Find dedicated transfer queue family
+    if (requested_family_flags & VK_QUEUE_TRANSFER_BIT)
+    {
+        for (int32 i = 0; i < queue_family_properties_.size(); ++i)
+        {
+            const VkQueueFamilyProperties& properties = queue_family_properties_[i];
+            if ((properties.queueFlags & VK_QUEUE_TRANSFER_BIT) && (properties.queueFlags & VK_QUEUE_GRAPHICS_BIT) == 0
+                &&(properties.queueFlags & VK_QUEUE_COMPUTE_BIT) == 0)
+            {
+                indices.transfer = i;
+            }
+        }
+    }
+
+    // For other queue types or if we can't find dedicated queues, we'll just use whatever we can get our hands on
+    for (int32 i = 0; i < queue_family_properties_.size(); ++i)
+    {
+        const VkQueueFamilyProperties& properties = queue_family_properties_[i];
+
+        if(requested_family_flags & VK_QUEUE_TRANSFER_BIT && indices.transfer == -1 &&
+            properties.queueFlags & VK_QUEUE_TRANSFER_BIT)
+        {
+            indices.transfer = i;
+        }
+
+        if (requested_family_flags & VK_QUEUE_COMPUTE_BIT && indices.compute == -1 &&
+            properties.queueFlags & VK_QUEUE_COMPUTE_BIT)
+        {
+            indices.compute = i;
+        }
+
+        if (requested_family_flags & VK_QUEUE_GRAPHICS_BIT && indices.graphics == -1 &&
+            properties.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            indices.graphics = i;
+        }
+    }
+
+    return indices;
 }

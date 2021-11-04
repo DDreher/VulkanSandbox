@@ -4,6 +4,13 @@
 class VulkanRHI;
 class VulkanQueue;
 
+struct QueueFamilyIndices
+{
+    uint32_t graphics = -1;
+    uint32_t compute = -1;
+    uint32_t transfer = -1;
+};
+
 struct DeviceCreationProperties
 {
     VkPhysicalDeviceFeatures features;  // Features that should be enabled
@@ -109,6 +116,7 @@ public:
 private:
     std::vector<const char*> GetRequiredExtensions() const;
     std::vector<const char*> GetRequiredValidationLayers() const;
+    QueueFamilyIndices GetQueueFamilyIndices(uint32_t requested_family_flags) const;
 
     VulkanRHI* RHI_ = nullptr;
     int32 device_idx_ = -1;
