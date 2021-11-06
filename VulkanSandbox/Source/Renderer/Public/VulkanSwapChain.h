@@ -1,6 +1,8 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
+class VulkanRHI;
+
 struct SwapChainSupportDetails
 {
     VkSurfaceCapabilitiesKHR capabilities;  // min/max number of images in swap chain, min/max width and height of images
@@ -11,19 +13,19 @@ struct SwapChainSupportDetails
 class VulkanSwapChain
 {
 public:
-    VulkanSwapChain(const VulkanRHI* RHI);
+    VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height);
 
     void Destroy();
     void Recreate();
 
 private:
-    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+    SwapChainSupportDetails QuerySwapChainSupport();
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
-    VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-    uint32 ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities)
+    VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height);
+    uint32 ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities);
 
-    const VulkanRHI* RHI_ = nullptr;
+    VulkanRHI* RHI_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     
     VkSurfaceFormatKHR surface_format_;

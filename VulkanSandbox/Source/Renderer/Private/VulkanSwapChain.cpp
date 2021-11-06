@@ -1,16 +1,20 @@
 #include "VulkanSwapChain.h"
 
-VulkanSwapChain::VulkanSwapChain(const VulkanRHI* RHI)
+#include "VulkanDevice.h"
+#include "VulkanMacros.h"
+#include "VulkanRHI.h"
+#include "VulkanQueue.h"
+
+VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height)
     : RHI_(RHI)
 {
     CHECK(RHI_ != nullptr);
-    CHECK(RHI_->GetInstance() != nullptr);
     CHECK(RHI_->GetDevice() != nullptr);
 
-    SwapChainSupportDetails swapchain_support_details = QuerySwapChainSupport()
+    SwapChainSupportDetails swapchain_support_details = QuerySwapChainSupport();
     surface_format_ = ChooseSurfaceFormat(swapchain_support_details.surface_formats);
     present_mode_ = ChoosePresentMode(swapchain_support_details.present_modes);
-    image_extent_ = ChooseImageExtent(swapchain_support_details.capabilities);
+    image_extent_ = ChooseImageExtent(swapchain_support_details.capabilities, width, height);
     uint32 num_images = ChooseNumberOfImages(swapchain_support_details.capabilities);
 
     VkSwapchainCreateInfoKHR create_info{};
@@ -19,7 +23,7 @@ VulkanSwapChain::VulkanSwapChain(const VulkanRHI* RHI)
     create_info.minImageCount = num_images;
     create_info.imageFormat = surface_format_.format;
     create_info.imageColorSpace = surface_format_.colorSpace;
-    create_info.imageExtent = extent;
+    create_info.imageExtent = image_extent_;
     create_info.imageArrayLayers = 1;   // Amount of layers each image consists of. 1 unless developing a stereoscopic 3D application.
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;   // What kind of operations images in the swap chain are used for.
                                                                     // For now we'll render directly to them => Color attachment.
@@ -67,9 +71,9 @@ VulkanSwapChain::VulkanSwapChain(const VulkanRHI* RHI)
     create_info.oldSwapchain = VK_NULL_HANDLE;  // For now assume that we will only ever create one swap chain.
 
     LOG("Creating Vulkan swapchain (present mode: {}, format: {}, color space: {})",
-        static_cast<uint32t>(present_mode_), static_cast<uint32t>(surface_format_.format), static_cast<uint32t>(surface_format_.colorSpace));
+        static_cast<uint32>(present_mode_), static_cast<uint32>(surface_format_.format), static_cast<uint32>(surface_format_.colorSpace));
 
-    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swap_chain_);
+    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_);
     VERIFY_VK_RESULT(result);
     if (result != VK_SUCCESS)
     {
@@ -80,9 +84,9 @@ VulkanSwapChain::VulkanSwapChain(const VulkanRHI* RHI)
     // Retrieve image handles of swap chain.
     // We only specified the minimum num of images => We have to check how much were created
     uint32 num_swapchain_images;
-    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swap_chain_, &num_swapchain_images, nullptr);
+    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr);
     swap_chain_images_.resize(num_swapchain_images);
-    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swap_chain_, &num_swapchain_images, swap_chain_images_.data());
+    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data());
 }
 
 SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
@@ -151,11 +155,11 @@ VkPresentModeKHR VulkanSwapChain::ChoosePresentMode(const std::vector<VkPresentM
     }
 
     LOG_WARN("VK_PRESENT_MODE_MAILBOX_KHR not supported. Falling back to first supported present mode ()",
-        static_cast<uint32>(available_formats[0].format));
+        static_cast<uint32>(available_present_modes[0]));
     return available_present_modes[0];
 }
 
-VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height)
 {
     // Swap extent is the resolution of the swap chain images in PIXELS! We have to keep that in mind for high DPI screens, e.g. Retina displays.
     // Usually Vulkan tells us to match the window resolution and sets the extends by itself.
@@ -170,8 +174,8 @@ VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& ca
 
         // Important: Extent in PIXELS instead of screen coordinates.
         VkExtent2D actual_extent = {
-            static_cast<uint32>(framebuffer_width_),
-            static_cast<uint32>(framebuffer_height_)
+            static_cast<uint32>(desired_width),
+            static_cast<uint32>(desired_height)
         };
 
         // Clamp to range [minImageExtent, maxImageExtent]
@@ -182,21 +186,21 @@ VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& ca
     }
 }
 
-uint32 VulkanSwapChain::ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities) const VulkanRHI* RHI_
+uint32 VulkanSwapChain::ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities)
 {
     // Check the max number of supported images
     // 0 means that there is no maximum set by the device!
-    bool is_num_images_limited = swapchain_support_details.capabilities.maxImageCount > 0;
-
+    bool is_num_images_limited = capabilities.maxImageCount > 0;
+    
     // Specify the minimum num images we would like to have in the swap chain
     // Minimum + 1 is recommended to avoid GPU stalls.
-    uint32 desired_num_images = swapchain_support_details.capabilities.minImageCount + 1;
-
+    uint32 desired_num_images = capabilities.minImageCount + 1;
+    
     // Ensure we don't exceed the supported max image count in the swap chain. 
-    if (is_num_images_limited && desired_num_images > swapchain_support_details.capabilities.maxImageCount)
+    if (is_num_images_limited && desired_num_images > capabilities.maxImageCount)
     {
-        desired_num_images = swapchain_support_details.capabilities.maxImageCount;
+        desired_num_images = capabilities.maxImageCount;
     }
-
+    
     return desired_num_images;
 }
