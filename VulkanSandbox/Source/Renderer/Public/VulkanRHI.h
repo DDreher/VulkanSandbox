@@ -1,8 +1,8 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
-#include "VulkanInstance.h"
 
-class VulkanDevice;
+#include "VulkanInstance.h"
+#include "VulkanDevice.h"
 
 class VulkanRHI
 {

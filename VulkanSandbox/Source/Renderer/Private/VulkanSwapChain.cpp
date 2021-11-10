@@ -1,15 +1,16 @@
 #include "VulkanSwapChain.h"
 
-#include "VulkanDevice.h"
 #include "VulkanMacros.h"
 #include "VulkanRHI.h"
 #include "VulkanQueue.h"
 
-VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height)
-    : RHI_(RHI)
+VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
+    : RHI_(RHI),
+    surface_(surface)
 {
     CHECK(RHI_ != nullptr);
     CHECK(RHI_->GetDevice() != nullptr);
+    CHECK(surface_ != VK_NULL_HANDLE);
 
     SwapChainSupportDetails swapchain_support_details = QuerySwapChainSupport();
     surface_format_ = ChooseSurfaceFormat(swapchain_support_details.surface_formats);
@@ -73,7 +74,7 @@ VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height)
     LOG("Creating Vulkan swapchain (present mode: {}, format: {}, color space: {})",
         static_cast<uint32>(present_mode_), static_cast<uint32>(surface_format_.format), static_cast<uint32>(surface_format_.colorSpace));
 
-    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_);
+    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_handle_);
     VERIFY_VK_RESULT(result);
     if (result != VK_SUCCESS)
     {
@@ -84,9 +85,19 @@ VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height)
     // Retrieve image handles of swap chain.
     // We only specified the minimum num of images => We have to check how much were created
     uint32 num_swapchain_images;
-    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr);
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_handle_, &num_swapchain_images, nullptr));
     swap_chain_images_.resize(num_swapchain_images);
-    vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data());
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_handle_, &num_swapchain_images, swap_chain_images_.data()));
+}
+
+void VulkanSwapChain::Destroy()
+{
+
+}
+
+void VulkanSwapChain::Recreate()
+{
+
 }
 
 SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
@@ -96,7 +107,7 @@ SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.capabilities);
 
     uint32_t surface_format_count;
-    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(RHI_->GetDevice()->GetPhysicalDeviceHandle(), surface_, &surface_format_count, nullptr));
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &surface_format_count, nullptr));
     details.surface_formats.resize(surface_format_count);
     VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &surface_format_count, details.surface_formats.data()));
 

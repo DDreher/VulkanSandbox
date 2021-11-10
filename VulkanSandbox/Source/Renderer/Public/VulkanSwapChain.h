@@ -13,10 +13,38 @@ struct SwapChainSupportDetails
 class VulkanSwapChain
 {
 public:
-    VulkanSwapChain(VulkanRHI* RHI, uint32 width, uint32 height);
+    VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
 
     void Destroy();
     void Recreate();
+
+    const std::vector<VkImage>& GetSwapChainImages()
+    {
+        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        return swap_chain_images_;
+    }
+
+    VkSurfaceFormatKHR GetSurfaceFormat() const
+    {
+        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        return surface_format_;
+    }
+
+    VkPresentModeKHR GetPresentMode() const
+    {
+        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        return present_mode_;
+    }
+
+    const VkExtent2D& GetImageExtent() const
+    {
+        return image_extent_;
+    }
+
+    const std::vector<VkImage>& GetSwapChainImages() const
+    {
+        return swap_chain_images_;
+    }
 
 private:
     SwapChainSupportDetails QuerySwapChainSupport();
@@ -32,7 +60,6 @@ private:
     VkPresentModeKHR present_mode_;
     VkExtent2D image_extent_;
 
-    VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
-
-    std::vector<VkImage> swap_chain_images_; // image handles will be automatically cleaned up by destruction of swap chain.
+    VkSwapchainKHR swapchain_handle_ = VK_NULL_HANDLE;
+    std::vector<VkImage> swap_chain_images_;
 };

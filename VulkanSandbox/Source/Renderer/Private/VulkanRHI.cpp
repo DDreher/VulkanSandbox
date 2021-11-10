@@ -2,7 +2,6 @@
 
 #include "vulkan/vulkan_core.h"
 
-#include "VulkanDevice.h"
 #include "VulkanMacros.h"
 
 VulkanRHI::VulkanRHI()
