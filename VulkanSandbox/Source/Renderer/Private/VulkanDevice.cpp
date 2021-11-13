@@ -241,7 +241,7 @@ void VulkanDevice::InitPresentQueue(VkSurfaceKHR surface)
 
     // For now we simply check the already existing queues for present support
     VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, graphics_queue_->GetFamilyIndex(), surface, &is_present_supported));
-    if(is_present_supported == VK_SUCCESS)
+    if(is_present_supported)
     {
         present_queue_ = graphics_queue_;
         LOG("Using graphics queue as present queue");
@@ -249,7 +249,7 @@ void VulkanDevice::InitPresentQueue(VkSurfaceKHR surface)
     }
 
     VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, compute_queue_->GetFamilyIndex(), surface, &is_present_supported));
-    if (is_present_supported == VK_SUCCESS)
+    if (is_present_supported)
     {
         present_queue_ = compute_queue_;
         LOG("Using graphics queue as present queue");
@@ -257,7 +257,7 @@ void VulkanDevice::InitPresentQueue(VkSurfaceKHR surface)
     }
 
     VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device_, transfer_queue_->GetFamilyIndex(), surface, &is_present_supported));
-    if (is_present_supported == VK_SUCCESS)
+    if (is_present_supported)
     {
         present_queue_ = transfer_queue_;
         LOG("Using transfer queue as present queue");
