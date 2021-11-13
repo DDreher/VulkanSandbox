@@ -29,6 +29,118 @@ void VulkanRHI::Shutdown()
     instance_.Shutdown();
 }
 
+VkImageView VulkanRHI::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips)
+{
+    CHECK(device_ != nullptr);
+    CHECK(device_->GetLogicalDeviceHandle() != VK_NULL_HANDLE);
+
+    VkImageViewCreateInfo view_info{};
+    view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view_info.image = image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = format;
+    view_info.subresourceRange.aspectMask = aspect_flags;
+    view_info.subresourceRange.baseMipLevel = 0;
+    view_info.subresourceRange.levelCount = num_mips;
+    view_info.subresourceRange.baseArrayLayer = 0;
+    view_info.subresourceRange.layerCount = 1;
+
+    VkImageView image_view;
+    VkResult result = vkCreateImageView(device_->GetLogicalDeviceHandle(), &view_info, nullptr, &image_view);
+    VERIFY_VK_RESULT(result);
+
+    if (result != VK_SUCCESS)
+    {
+        LOG_ERROR("Failed to create image view!");
+        exit(EXIT_FAILURE);
+    }
+
+    return image_view;
+}
+
+void VulkanRHI::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
+{
+    VkImageCreateInfo image_info{};
+    image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_info.imageType = VK_IMAGE_TYPE_2D;
+    image_info.extent.width = static_cast<uint32_t>(width);
+    image_info.extent.height = static_cast<uint32_t>(height);
+    image_info.extent.depth = 1; // One color value per texel
+    image_info.mipLevels = num_mips;
+    image_info.arrayLayers = 1;  // Single texture, no texture array
+    image_info.format = format;
+    image_info.tiling = tiling; // VK_IMAGE_TILING_LINEAR -> Texels are laid out in row-major order like the tex_data array
+                                // -> If we want to access texels directly in the memory, we have to use this!
+                                // VK_IMAGE_TILING_OPTIMAL -> Texels are laid out in an implementation defined order for optimal access
+                                // -> We use this here, because we use a staging buffer instead of a staging image
+    image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;   // VK_IMAGE_LAYOUT_UNDEFINED -> Not usable by the GPU and the very first transition will discard the texels
+                                                            // VK_IMAGE_LAYOUT_PREINITIALIZED -> Not usable by the GPU, but the first transition will preserve the texels.
+                                                            // Useful if we want to use an image as a staging image, e.g. upload data to it and then transition the image to be
+                                                            // a transfer source while preserving the data.
+                                                            // In our case, we transition the image to be a transfer destination and then copy the texel data to it from a buffer.
+    image_info.usage = usage;    // We want to transfer data to this image and we want to access the image in the shader
+    image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // Image is only used by the graphics queue family
+    image_info.samples = num_samples; // Related to multisampling. Only needed if image is used as attachment.
+    image_info.flags = 0; // Optional. Related to sparse images.
+
+    if (vkCreateImage(device_->GetLogicalDeviceHandle(), &image_info, nullptr, &image) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to create image!");
+    }
+
+    // Allocate memory for the image - Similar to allocating memory for a buffer
+    VkMemoryRequirements mem_requirements;
+    vkGetImageMemoryRequirements(device_->GetLogicalDeviceHandle(), image, &mem_requirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = mem_requirements.size;
+    allocInfo.memoryTypeIndex = FindMemoryType(mem_requirements.memoryTypeBits, properties);
+
+    if (vkAllocateMemory(device_->GetLogicalDeviceHandle(), &allocInfo, nullptr, &image_memory) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Failed to allocate image memory!");
+    }
+
+    vkBindImageMemory(device_->GetLogicalDeviceHandle(), image, image_memory, 0);
+}
+
+uint32 VulkanRHI::FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties)
+{
+    // GPU may offer different types of memory which differ in terms of allowed operations or performance.
+    // This function helps to find the available memory which suits our needs best.
+
+    // First query info about available memory types of the physical device
+    // VkPhysicalDeviceMemoryProperties::memoryHeaps -> distinct memory resources (e.g. dedicated VRAM or swap space in RAM when VRAM is depleted)
+    // VkPhysicalDeviceMemoryProperties::memoryTypes -> types which exist inside the memoryHeaps.
+    VkPhysicalDeviceMemoryProperties mem_properties;
+    vkGetPhysicalDeviceMemoryProperties(device_->GetPhysicalDeviceHandle(), &mem_properties);
+
+    // Then find a memory type that is suitable for the buffer itself
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++)
+    {
+        // type_filer specifies the bit field of memory types that are suitable
+        // -> We simply check if the bit is set for the memory types we want to accept
+        bool is_type_accepted = type_filter & (1 << i);
+        if (is_type_accepted)
+        {
+            // We also have to check for the properties of the memory!
+            // For example, we may want to be able to write to a vertex buffer from the CPU, so it has to support
+            // being mapped to the host.
+            // We may have multiple requested properties, so we have to use a bitwise AND operation to check if ALL properties are
+            // supported.
+            bool are_required_properties_supported = (mem_properties.memoryTypes[i].propertyFlags & properties) == properties;
+            if (are_required_properties_supported)
+            {
+                return i;
+            }
+        }
+    }
+
+    // Welp, we're screwed.
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
 void VulkanRHI::SelectAndInitDevice()
 {
     uint32 gpu_count = 0;

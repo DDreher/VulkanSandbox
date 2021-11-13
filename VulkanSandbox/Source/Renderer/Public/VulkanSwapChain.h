@@ -1,7 +1,7 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-class VulkanRHI;
+#include "VulkanRHI.h"
 
 struct SwapChainSupportDetails
 {
@@ -20,19 +20,19 @@ public:
 
     const std::vector<VkImage>& GetSwapChainImages()
     {
-        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        CHECK(swapchain_ != VK_NULL_HANDLE);
         return swap_chain_images_;
     }
 
     VkSurfaceFormatKHR GetSurfaceFormat() const
     {
-        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        CHECK(swapchain_ != VK_NULL_HANDLE);
         return surface_format_;
     }
 
     VkPresentModeKHR GetPresentMode() const
     {
-        CHECK(swapchain_handle_ != VK_NULL_HANDLE);
+        CHECK(swapchain_ != VK_NULL_HANDLE);
         return present_mode_;
     }
 
@@ -44,6 +44,11 @@ public:
     const std::vector<VkImage>& GetSwapChainImages() const
     {
         return swap_chain_images_;
+    }
+
+    inline VkSwapchainKHR GetHandle() const
+    {
+        return swapchain_;
     }
 
 private:
@@ -60,6 +65,6 @@ private:
     VkPresentModeKHR present_mode_;
     VkExtent2D image_extent_;
 
-    VkSwapchainKHR swapchain_handle_ = VK_NULL_HANDLE;
-    std::vector<VkImage> swap_chain_images_;
+    VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
+    std::vector<VkImage> swap_chain_images_;  // image handles will be automatically cleaned up by destruction of swap chain.
 };

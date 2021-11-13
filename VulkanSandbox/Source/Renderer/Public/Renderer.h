@@ -6,9 +6,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
 
-#include "VulkanBuffer.h"
 #include "Vertex.h"
+#include "VulkanBuffer.h"
+#include "VulkanRenderPass.h"
 #include "VulkanRHI.h"
+#include "VulkanViewport.h"
 
 struct GLFWwindow;
 
@@ -26,24 +28,6 @@ struct UniformBufferObject
     alignas(16) glm::mat4 model;
     alignas(16) glm::mat4 view;
     alignas(16) glm::mat4 proj;
-};
-
-struct QueueFamilyIndices
-{
-    std::optional<uint32_t> graphics_family; // Every value could be potentially valid, so we have to rely on optional.
-    std::optional<uint32_t> present_family; // Could be the case that the graphics queue family does not support presenting to a surface...
-
-    bool HasFoundQueueFamily()
-    {
-        return graphics_family.has_value() && present_family.has_value();
-    }
-};
-
-struct SwapChainSupportDetails
-{
-    VkSurfaceCapabilitiesKHR capabilities;  // min/max number of images in swap chain, min/max width and height of images
-    std::vector<VkSurfaceFormatKHR> surface_formats;    // pixel format, color space
-    std::vector<VkPresentModeKHR> present_modes;    // conditions for "swapping" images to the screen
 };
 
 class VulkanRenderer
@@ -65,10 +49,6 @@ private:
 
     void CreateSurface(GLFWwindow* window);
 
-    SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
-
-    void CreateSwapChain();
-
     void CleanUpSwapChain();
 
     // Recreate SwapChain and all things depending on it.
@@ -80,15 +60,11 @@ private:
 
     VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
-    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips);
-
-    void CreateImageViews();
-
     bool CheckValidationLayerSupport();
 
     void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
 
-    void CreateRenderPass();
+    //void CreateRenderPass();
 
     void CreateDescriptorSetLayout();
 
@@ -106,24 +82,13 @@ private:
 
     void CreateCommandBuffers();
 
-    uint32_t FindMemoryType(uint32_t type_filter, VkMemoryPropertyFlags properties);
-
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory);
 
     void CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size);
 
-    void CreateImage(uint32_t width, uint32_t height, uint32_t num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-        VkImage& image, VkDeviceMemory& image_memory);
-
     void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t num_mips);
 
     void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-
-    // Queries the physical device for desired formats and returns the first one that's supported.
-    VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
-
-    // Helper function to select a format with depth component that is supported as depth attachment
-    VkFormat FindDepthFormat();
 
     bool HasStencilComponent(VkFormat format);
 
@@ -181,14 +146,6 @@ private:
                                                                                                 // anyway...
 
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
-
-    VkSwapchainKHR swap_chain_ = VK_NULL_HANDLE;
-    std::vector<VkImage> swap_chain_images_; // image handles will be automatically cleaned up by destruction of swap chain.
-    VkFormat swap_chain_image_format_;
-    VkExtent2D swap_chain_extent_;
-    std::vector<VkImageView> swap_chain_image_views_;   // Will be explicitly created by us -> We have to clean them up!
-
-    VkRenderPass render_pass_ = VK_NULL_HANDLE;
 
     // Used by a pipeline to access the descriptor sets.
     // Defines interface between shader stages used by the pipeline and shader resources (but doesn't do the actual binding!)
@@ -251,4 +208,6 @@ private:
     bool was_frame_buffer_resized_ = false;
 
     VulkanRHI* RHI_ = nullptr;
+    VulkanViewport* viewport_ = nullptr;
+    VulkanRenderPass* render_pass_ = nullptr;
 };

@@ -24,6 +24,13 @@ public:
     */
     void Shutdown();
 
+    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips);
+
+    void CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling,
+        VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+
+    uint32 FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties); // TODO: I guess this shouldn't be here... Maybe should be in device.
+
     const std::vector<char*>& GetInstanceExtensions() const
     {
         return instance_extensions_;
@@ -33,9 +40,6 @@ public:
     {
         return instance_layers_;
     }
-
-    //static void DestroySwapChain();
-    //static void RecreateSwapChain(void* NewNativeWindow);
 
     const VulkanInstance& GetInstance() const
     {

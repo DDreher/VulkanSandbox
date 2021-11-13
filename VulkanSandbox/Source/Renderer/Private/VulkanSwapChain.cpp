@@ -1,7 +1,6 @@
 #include "VulkanSwapChain.h"
 
 #include "VulkanMacros.h"
-#include "VulkanRHI.h"
 #include "VulkanQueue.h"
 
 VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
@@ -74,7 +73,7 @@ VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 wi
     LOG("Creating Vulkan swapchain (present mode: {}, format: {}, color space: {})",
         static_cast<uint32>(present_mode_), static_cast<uint32>(surface_format_.format), static_cast<uint32>(surface_format_.colorSpace));
 
-    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_handle_);
+    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_);
     VERIFY_VK_RESULT(result);
     if (result != VK_SUCCESS)
     {
@@ -85,14 +84,14 @@ VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 wi
     // Retrieve image handles of swap chain.
     // We only specified the minimum num of images => We have to check how much were created
     uint32 num_swapchain_images;
-    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_handle_, &num_swapchain_images, nullptr));
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr));
     swap_chain_images_.resize(num_swapchain_images);
-    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_handle_, &num_swapchain_images, swap_chain_images_.data()));
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data()));
 }
 
 void VulkanSwapChain::Destroy()
 {
-
+    vkDestroySwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, nullptr);
 }
 
 void VulkanSwapChain::Recreate()

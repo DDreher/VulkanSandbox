@@ -110,8 +110,10 @@ public:
         return logical_device_;
     }
 
-    // GPU Info
-    std::vector<VkQueueFamilyProperties> queue_family_properties_;
+    // Queries the physical device for desired formats and returns the first one that's supported.
+    VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
+
+    VkFormat FindDepthFormat();
 
 private:
     std::vector<const char*> GetRequiredExtensions() const;
@@ -135,4 +137,7 @@ private:
     VulkanQueue* compute_queue_ = nullptr;
     VulkanQueue* transfer_queue_ = nullptr;
     VulkanQueue* present_queue_ = nullptr;
+
+    // GPU Info
+    std::vector<VkQueueFamilyProperties> queue_family_properties_;
 };

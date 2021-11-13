@@ -1,8 +1,8 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-class VulkanRHI;
-class VulkanSwapChain;
+#include "VulkanRHI.h"
+#include "VulkanSwapChain.h"
 
 class VulkanViewport
 {
@@ -10,10 +10,32 @@ public:
     VulkanViewport(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
     ~VulkanViewport();
 
-private:
+    inline VulkanSwapChain* GetSwapChain() const
+    {
+        return swapchain_;
+    }
+
+    inline uint32 GetWidth() const
+    {
+        return width_;
+    }
+
+    inline uint32 GetHeight() const
+    {
+        return height_;
+    }
+
+    const std::vector<VkImageView>& GetBackBufferImageViews() const
+    {
+        return backbuffer_image_views_;
+    }
+    
+    // TODO: I guess these shouldn't be public?
     void CreateSwapchain();
     void RecreateSwapchain();
     void DestroySwapchain();
+
+private:
     
     void Resize(uint32 width, uint32 height);
    
