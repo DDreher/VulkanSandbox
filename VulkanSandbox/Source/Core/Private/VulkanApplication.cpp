@@ -50,6 +50,8 @@ void VulkanApplication::Render()
 
 void VulkanApplication::MainLoop()
 {
+    LOG("VulkanApplication::MainLoop - Entering Main Loop");
+
     while (glfwWindowShouldClose(window_) == false)
     {
         glfwPollEvents();
