@@ -91,6 +91,8 @@ void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
     CreateCommandBuffers();
 
     CreateSyncObjects();
+
+    LOG("VulkanRenderer::Init - Finished");
 }
 
 void VulkanRenderer::Cleanup()
@@ -190,6 +192,9 @@ void VulkanRenderer::CleanUpSwapChain()
 
 void VulkanRenderer::RecreateSwapChain()
 {
+    CHECK_NO_ENTRY();
+    /* TODO: Refactoring.
+
     // In case we minimize the frame buffer will have size 0.
     // -> We pause the application until it has a frame buffer with a valid size again.
     // TODO: Get rid of the glfw stuff. Ideally the renderer should be agnostic to glfw / sdl or whatever we use to create the window.
@@ -228,44 +233,7 @@ void VulkanRenderer::RecreateSwapChain()
     CreateDescriptorPool();
     CreateDescriptorSets();
     CreateCommandBuffers();
-}
-
-bool VulkanRenderer::CheckValidationLayerSupport()
-{
-    uint32_t layer_count;
-    vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
-    std::vector<VkLayerProperties> available_layers(layer_count);
-    vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
-
-    for (const char* layer_name : valiation_layers_)
-    {
-        bool layer_found = false;
-
-        for (const auto& layer_properties : available_layers)
-        {
-            if (strcmp(layer_name, layer_properties.layerName) == 0)
-            {
-                layer_found = true;
-                break;
-            }
-        }
-
-        if (layer_found == false)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-void VulkanRenderer::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info)
-{
-    create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    create_info.pfnUserCallback = DebugCallback;
+     */
 }
 
 void VulkanRenderer::CreateDescriptorSetLayout()
@@ -701,7 +669,6 @@ void VulkanRenderer::CreateCommandBuffers()
         // Bind descriptor set to the descriptors in the shader
         vkCmdBindDescriptorSets(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, // <- have to specify if we bind to graphics or compute pipeline
             pipeline_layout_, 0, 1, &descriptor_sets_[i], 0, nullptr);
-        vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0);
 
         //vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);  // <-- Draws without index buffer
         vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
@@ -1500,11 +1467,13 @@ void VulkanRenderer::DrawFrame()
     // VK_SUBOPTIMAL_KHR -> Some parts of the swap chain are incompatible, but we could theoretically still present to the surface.
     if (result == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        CHECK_NO_ENTRY(); // TODO: Refactor
         RecreateSwapChain();
         return;
     }
     else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
+        CHECK_NO_ENTRY();
         throw std::runtime_error("Failed to acquire swap chain image");
     }
 
@@ -1578,11 +1547,13 @@ void VulkanRenderer::DrawFrame()
     // In this case it's important to do this after present to ensure that the semaphores are in the correct state.
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || was_frame_buffer_resized_)
     {
+        CHECK_NO_ENTRY(); // TODO: Refactoring
         RecreateSwapChain();
         was_frame_buffer_resized_ = false;
     }
     else if (result != VK_SUCCESS)
     {
+        CHECK_NO_ENTRY(); // TODO: Refactoring
         LOG_ERROR("Failed to present swap chain image to surface");
         exit(EXIT_FAILURE);
     }
