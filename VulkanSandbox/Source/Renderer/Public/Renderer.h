@@ -54,18 +54,6 @@ private:
     // Recreate SwapChain and all things depending on it.
     void RecreateSwapChain();
 
-    VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats);
-
-    VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
-
-    VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
-
-    bool CheckValidationLayerSupport();
-
-    void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& create_info);
-
-    //void CreateRenderPass();
-
     void CreateDescriptorSetLayout();
 
     void CreateGraphicsPipeline();
