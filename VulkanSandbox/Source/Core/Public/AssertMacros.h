@@ -22,5 +22,5 @@
     #define VERIFY_MSG(Expression, ...) CHECK_MSG(Expression, __VA_ARGS__)
     #define VERIFY(Expression) CHECK(Expression)
     
-    #define CHECK_NO_ENTRY() checkf(false, "You should not be here!");
+    #define CHECK_NO_ENTRY() CHECK_MSG(false, "You should not be here!");
 #endif
