@@ -83,11 +83,11 @@ VulkanRenderPass::VulkanRenderPass(VulkanRHI* RHI, VulkanSwapChain* swapchain)
     subpass.pColorAttachments = &color_attachment_ref;
     subpass.pDepthStencilAttachment = &depth_attachment_ref;    //  a subpass can only use a single depth (+stencil) attachment
 
-    if (num_msaa_samples != VK_SAMPLE_COUNT_1_BIT)
-    {
+    //if (num_msaa_samples != VK_SAMPLE_COUNT_1_BIT)
+    //{
         subpass.pResolveAttachments = &color_attachment_resolve_ref;    // This is enough to let the render pass define a multisample resolve operation
                                                                         // which will let us render the image to screen
-    }
+    //}
 
     // Subpass dependencies
     // Subpasses in a render pass automatically take care of image layout transitions. 
