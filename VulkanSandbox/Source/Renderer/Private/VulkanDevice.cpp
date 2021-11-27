@@ -28,12 +28,9 @@ void VulkanDevice::Destroy()
     transfer_queue_ = nullptr;
     delete compute_queue_;
     compute_queue_ = nullptr;
-    delete present_queue_;
-    present_queue_ = nullptr;
 
     CHECK(logical_device_ != VK_NULL_HANDLE);
     vkDestroyDevice(logical_device_, nullptr);
-    logical_device_ = VK_NULL_HANDLE;
 }
 
 void VulkanDevice::QueryGPUInfo()
