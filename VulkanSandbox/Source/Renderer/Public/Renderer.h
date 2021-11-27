@@ -12,6 +12,7 @@
 #include "VulkanRHI.h"
 #include "VulkanViewport.h"
 #include "VulkanCommandBufferPool.h"
+#include "VulkanCommandBuffer.h"
 
 struct GLFWwindow;
 
@@ -67,7 +68,7 @@ private:
 
     void EndSingleTimeCommands(VkCommandBuffer command_buffer);
 
-    void CreateCommandBuffers();
+    void FillCommandBuffers();
 
     void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& out_buffer, VkDeviceMemory& out_buffer_memory);
 
@@ -146,7 +147,7 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
 
     VulkanCommandBufferPool* command_buffer_pool_ = nullptr;
-    std::vector<VkCommandBuffer> command_buffers_;
+    std::vector<VulkanCommandBuffer*> command_buffers_;
 
     // Semaphores - Device-internal synchronizations. Coordinate operations within the graphics queue, ensure correct command ordering
     std::vector<VkSemaphore> image_available_semaphores_;

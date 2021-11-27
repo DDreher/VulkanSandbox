@@ -10,6 +10,7 @@
 
 #include "FileIO.h"
 #include "VulkanDevice.h"
+#include "VulkanMacros.h"
 #include "VulkanQueue.h"
 #include "VulkanRHI.h"
 #include "VulkanViewport.h"
@@ -85,8 +86,16 @@ void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
     CreateDescriptorPool();
     CreateDescriptorSets();
 
-    // Create command buffers for each image in the swap chain.
-    CreateCommandBuffers();
+    // Create command buffers
+    // Because one of the drawing commands involves binding the right VkFramebuffer, we have to record a command buffer for every image in the swap chain.
+    command_buffers_.resize(swap_chain_framebuffers_.size());
+    for (size_t i = 0; i < command_buffers_.size(); ++i)
+    {
+        command_buffers_[i] = new VulkanCommandBuffer(RHI->GetDevice(), command_buffer_pool_);
+    }
+
+    // For now also prerecord the command buffers since we want to show a static model
+    FillCommandBuffers();
 
     CreateSyncObjects();
 
@@ -122,8 +131,6 @@ void VulkanRenderer::Cleanup()
 
     delete command_buffer_pool_;
     command_buffer_pool_ = nullptr;
-
-    vkDestroyDevice(RHI_->GetDevice()->GetLogicalDeviceHandle(), nullptr);
 
     vkDestroySurfaceKHR(RHI_->GetInstance().GetHandle(), surface_, nullptr);
 }
@@ -168,7 +175,11 @@ void VulkanRenderer::CleanUpSwapChain()
     }
 
     // We don't have to recreate the whole command pool.
-    vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_buffer_pool_->GetHandle(), static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
+    for(size_t i=0; i<command_buffers_.size(); ++i)
+    {
+        delete command_buffers_[i];
+        command_buffers_[i] = nullptr;
+    }
 
     vkDestroyPipeline(RHI_->GetDevice()->GetLogicalDeviceHandle(), graphics_pipeline_, nullptr);
     vkDestroyPipelineLayout(RHI_->GetDevice()->GetLogicalDeviceHandle(), pipeline_layout_, nullptr);
@@ -577,27 +588,13 @@ void VulkanRenderer::EndSingleTimeCommands(VkCommandBuffer command_buffer)
     vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_buffer_pool_->GetHandle(), 1, &command_buffer);
 }
 
-void VulkanRenderer::CreateCommandBuffers()
+void VulkanRenderer::FillCommandBuffers()
 {
-    // Because one of the drawing commands involves binding the right VkFramebuffer, we have to record a command buffer for every image in the swap chain.
-    command_buffers_.resize(swap_chain_framebuffers_.size());
-
-    VkCommandBufferAllocateInfo alloc_info{};
-    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = command_buffer_pool_->GetHandle();
-    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // Specifies if the allocated command buffers are primary or secondary command buffers
-                                                        // VK_COMMAND_BUFFER_LEVEL_PRIMARY -> Can be submitted to a queue for execution, but cannot be called from other command buffers
-                                                        // VK_COMMAND_BUFFER_LEVEL_SECONDARY -> Cannot be submitted directly, but can be called from primary command buffers.
-    alloc_info.commandBufferCount = static_cast<uint32_t>(command_buffers_.size());
-
-    if (vkAllocateCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), &alloc_info, command_buffers_.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to allocate command buffers!");
-    }
-
-    // For now also record the command buffer since we want to show a static triangle
     for (size_t i = 0; i < command_buffers_.size(); ++i)
     {
+        CHECK(command_buffers_[i] != nullptr);
+        VkCommandBuffer cmd_buffer = command_buffers_[i]->GetHandle();
+
         VkCommandBufferBeginInfo begin_info{};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         begin_info.flags = 0;   // Optional.
@@ -606,11 +603,7 @@ void VulkanRenderer::CreateCommandBuffers()
                                 // VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution.
         begin_info.pInheritanceInfo = nullptr;  // Optional. Specifies which state to inherit from the calling primary command buffers.
                                                 // Only relevant for secondary command buffers.
-
-        if (vkBeginCommandBuffer(command_buffers_[i], &begin_info) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to begin recording command buffer!");
-        }
+        VERIFY_VK_RESULT(vkBeginCommandBuffer(cmd_buffer, &begin_info));
 
         VkRenderPassBeginInfo render_pass_info{};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -630,9 +623,9 @@ void VulkanRenderer::CreateCommandBuffers()
         render_pass_info.clearValueCount = static_cast<uint32_t>(clear_values.size());;
         render_pass_info.pClearValues = clear_values.data();
 
-        vkCmdBeginRenderPass(command_buffers_[i], &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+        vkCmdBeginRenderPass(cmd_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
+        vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
 
         // We've now told Vulkan which operations to execute in the graphics pipeline and which attachment to use in the fragment shader,
         // so all that remains is binding the vertex buffer and drawing the triangle
@@ -640,25 +633,22 @@ void VulkanRenderer::CreateCommandBuffers()
         VkDeviceSize offsets[] = { 0 };
 
         // Bind vertex buffer to bindings
-        vkCmdBindVertexBuffers(command_buffers_[i], 0 /*offset*/, 1 /*num bindings*/,
+        vkCmdBindVertexBuffers(cmd_buffer, 0 /*offset*/, 1 /*num bindings*/,
             vertex_buffers, offsets /*byte offsets to start reading the data from*/);
-        vkCmdBindIndexBuffer(command_buffers_[i], index_buffer_.GetBufferHandle(), 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
+        vkCmdBindIndexBuffer(cmd_buffer, index_buffer_.GetBufferHandle(), 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
                                                                                                         // Can't use different indices for each vertex attribute (e.g. for normals)
                                                                                                         // Also: If we have uint32 indices, we have to adjust the type!
 
         // Bind descriptor set to the descriptors in the shader
-        vkCmdBindDescriptorSets(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, // <- have to specify if we bind to graphics or compute pipeline
+        vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, // <- have to specify if we bind to graphics or compute pipeline
             pipeline_layout_, 0, 1, &descriptor_sets_[i], 0, nullptr);
 
         //vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);  // <-- Draws without index buffer
-        vkCmdDrawIndexed(command_buffers_[i], static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
+        vkCmdDrawIndexed(cmd_buffer, static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
 
-        vkCmdEndRenderPass(command_buffers_[i]);
+        vkCmdEndRenderPass(cmd_buffer);
 
-        if (vkEndCommandBuffer(command_buffers_[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to record command buffer!");
-        }
+        VERIFY_VK_RESULT(vkEndCommandBuffer(cmd_buffer));
     }
 }
 
@@ -1486,7 +1476,7 @@ void VulkanRenderer::DrawFrame()
 
     // Submit the command buffer that binds the swap chain image we just acquired as color attachment
     submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &command_buffers_[image_index];
+    submit_info.pCommandBuffers = &command_buffers_[image_index]->GetHandle();
 
     // Specify which semaphores to signal once the command buffer(s) have finished execution
     VkSemaphore signal_semaphores[] = { render_finished_semaphores_[current_frame_] };
