@@ -1,8 +1,9 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
+#include "VulkanQueue.h"
+
 class VulkanRHI;
-class VulkanQueue;
 
 struct QueueFamilyIndices
 {
