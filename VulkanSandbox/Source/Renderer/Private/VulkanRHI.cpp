@@ -16,14 +16,15 @@ void VulkanRHI::Init()
 
 void VulkanRHI::Shutdown()
 {
-    for(VulkanDevice* device : found_devices_)
+    for(size_t i=0; i<found_devices_.size(); ++i)
     {
-        CHECK(device != nullptr);
-        device->Destroy();
-        delete device;
-        device = nullptr;
+        CHECK(found_devices_[i] != nullptr);
+        found_devices_[i]->Destroy();
+        delete found_devices_[i];
+        found_devices_[i] = nullptr;
     }
     found_devices_.clear();
+
     device_ = nullptr;
 
     instance_.Shutdown();
