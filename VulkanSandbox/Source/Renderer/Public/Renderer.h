@@ -11,6 +11,7 @@
 #include "VulkanRenderPass.h"
 #include "VulkanRHI.h"
 #include "VulkanViewport.h"
+#include "VulkanCommandBufferPool.h"
 
 struct GLFWwindow;
 
@@ -61,8 +62,6 @@ private:
     VkShaderModule CreateShaderModule(const std::vector<char>& code);
 
     void CreateFramebuffers();
-
-    void CreateCommandPool();
 
     VkCommandBuffer BeginSingleTimeCommands();
 
@@ -145,7 +144,8 @@ private:
     VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
 
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
-    VkCommandPool command_pool_ = VK_NULL_HANDLE;
+
+    VulkanCommandBufferPool* command_buffer_pool_ = nullptr;
     std::vector<VkCommandBuffer> command_buffers_;
 
     // Semaphores - Device-internal synchronizations. Coordinate operations within the graphics queue, ensure correct command ordering

@@ -52,9 +52,7 @@ void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
 
     CreateGraphicsPipeline(); // Configure stages of the render pipeline
 
-    // Drawing operations and memory transfers are stored in command buffers. These are retrieved from command pools.
-    // We can fill these buffers in multiple threads and then execute them all at once on the main thread.
-    CreateCommandPool();
+    command_buffer_pool_ = new VulkanCommandBufferPool(RHI->GetDevice());
 
     // Init resources for MSAA
     CreateColorResources();
@@ -122,7 +120,8 @@ void VulkanRenderer::Cleanup()
         vkDestroyFence(RHI_->GetDevice()->GetLogicalDeviceHandle(), inflight_frame_fences_[i], nullptr);
     }
 
-    vkDestroyCommandPool(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_pool_, nullptr);  // Also destroys any command buffers we retrieved from the pool
+    delete command_buffer_pool_;
+    command_buffer_pool_ = nullptr;
 
     vkDestroyDevice(RHI_->GetDevice()->GetLogicalDeviceHandle(), nullptr);
 
@@ -169,7 +168,7 @@ void VulkanRenderer::CleanUpSwapChain()
     }
 
     // We don't have to recreate the whole command pool.
-    vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
+    vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_buffer_pool_->GetHandle(), static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
 
     vkDestroyPipeline(RHI_->GetDevice()->GetLogicalDeviceHandle(), graphics_pipeline_, nullptr);
     vkDestroyPipelineLayout(RHI_->GetDevice()->GetLogicalDeviceHandle(), pipeline_layout_, nullptr);
@@ -531,31 +530,12 @@ void VulkanRenderer::CreateFramebuffers()
     }
 }
 
-void VulkanRenderer::CreateCommandPool()
-{
-    // Command buffers are executed by submitting them on one of the device queues, like the graphics and presentation queues we retrieved. 
-    // Each command pool can only allocate command buffers that are submitted on a single type of queue. 
-    VkCommandPoolCreateInfo pool_info{};
-    pool_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_info.queueFamilyIndex = RHI_->GetDevice()->GetGraphicsQueue()->GetFamilyIndex();   // We only use drawing commands, so we stick to the graphics queue family.
-    pool_info.flags = 0;    // Optional.
-                            // VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
-                            // VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT: Allow command buffers to be rerecorded individually.
-                            // Without this flag they all have to be reset together.
-                            // For now we will only fill the command buffer once at the beginning of the program, so we don't use on any of the flags.
-
-    if (vkCreateCommandPool(RHI_->GetDevice()->GetLogicalDeviceHandle(), &pool_info, nullptr, &command_pool_) != VK_SUCCESS)
-    {
-        throw std::runtime_error("failed to create command pool!");
-    }
-}
-
 VkCommandBuffer VulkanRenderer::BeginSingleTimeCommands()
 {
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    alloc_info.commandPool = command_pool_;
+    alloc_info.commandPool = command_buffer_pool_->GetHandle();
     alloc_info.commandBufferCount = 1;
 
     VkCommandBuffer command_buffer;
@@ -594,7 +574,7 @@ void VulkanRenderer::EndSingleTimeCommands(VkCommandBuffer command_buffer)
     // been recorded so far. It's best to do this after the texture mapping works to check if the texture resources are still set up correctly.
 
     // Once the transfer is done we can clean up.
-    vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_pool_, 1, &command_buffer);
+    vkFreeCommandBuffers(RHI_->GetDevice()->GetLogicalDeviceHandle(), command_buffer_pool_->GetHandle(), 1, &command_buffer);
 }
 
 void VulkanRenderer::CreateCommandBuffers()
@@ -604,7 +584,7 @@ void VulkanRenderer::CreateCommandBuffers()
 
     VkCommandBufferAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    alloc_info.commandPool = command_pool_;
+    alloc_info.commandPool = command_buffer_pool_->GetHandle();
     alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY; // Specifies if the allocated command buffers are primary or secondary command buffers
                                                         // VK_COMMAND_BUFFER_LEVEL_PRIMARY -> Can be submitted to a queue for execution, but cannot be called from other command buffers
                                                         // VK_COMMAND_BUFFER_LEVEL_SECONDARY -> Cannot be submitted directly, but can be called from primary command buffers.
