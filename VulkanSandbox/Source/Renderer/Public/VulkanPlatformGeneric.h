@@ -1,6 +1,6 @@
 #pragma once
 
-class VulkanGenericPlatform
+class VulkanPlatformGeneric
 {
 public:
     static void GetInstanceExtensions(std::vector<const char*>& out_extensions);

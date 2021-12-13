@@ -1,11 +1,11 @@
 #pragma once
-#include "VulkanGenericPlatform.h"
+#include "VulkanPlatformGeneric.h"
 
-class VulkanWindowsPlatform : public VulkanGenericPlatform
+class VulkanPlatformWindows : public VulkanPlatformGeneric
 {
 public:
     static void GetInstanceExtensions(std::vector<const char*>& out_extensions);
     static void GetDeviceExtensions(std::vector<const char*>& out_extensions);
 };
 
-typedef VulkanWindowsPlatform VulkanPlatform;
+typedef VulkanPlatformWindows VulkanPlatform;
