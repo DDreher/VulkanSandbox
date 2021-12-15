@@ -39,13 +39,9 @@ void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
 
     viewport_ = new VulkanViewport(RHI_, surface_, framebuffer_width_, framebuffer_height_);
 
-    // We have to manually retrieve the handles to the images in the swap chain.
-    //CreateImageViews();
-
     // Tell Vulkan about the framebuffer attachments that will be used while rendering
     // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
     // how their contents should be handled throughout the rendering, operations,...
-    //CreateRenderPass();
     render_pass_ = new VulkanRenderPass(RHI, viewport_->GetSwapChain());
 
     // Specify the types of resources that are going to be accessed by the pipeline
