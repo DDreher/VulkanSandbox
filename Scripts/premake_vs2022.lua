@@ -29,7 +29,7 @@ workspace (ProjectName)
 	warnings "default"
 	characterset ("MBCS")
 	rtti "Off"
-	toolset "v142"
+	toolset "v143"
 	cppdialect "C++latest"
 	--flags {"FatalWarnings"}
 	

@@ -9,7 +9,7 @@ The code is written in C++ and heavily inspired by the [Vulkan Tutorial](https:/
 1. Install `Vulkan` if you haven't already.
 2. Make sure the `VULKAN_SDK` environment variable is set up properly.
 3. Run `GenerateProjectFiles.bat`.
-4. Open the generated `VulkanSandbox.sln` with VS2019.
+4. Open the generated `VulkanSandbox.sln` with VS2022.
 5. Build and run in the desired configuration (debug / release)
 
 ## Dependencies
