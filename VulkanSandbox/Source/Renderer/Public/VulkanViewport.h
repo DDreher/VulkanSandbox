@@ -39,8 +39,6 @@ private:
     
     void Resize(uint32 width, uint32 height);
    
-    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips);
-
     VulkanRHI* RHI_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
