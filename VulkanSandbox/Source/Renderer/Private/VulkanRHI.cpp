@@ -96,7 +96,7 @@ void VulkanRHI::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSamp
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = mem_requirements.size;
-    allocInfo.memoryTypeIndex = FindMemoryType(mem_requirements.memoryTypeBits, properties);
+    allocInfo.memoryTypeIndex = GetDevice()->FindMemoryType(mem_requirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(device_->GetLogicalDeviceHandle(), &allocInfo, nullptr, &image_memory) != VK_SUCCESS)
     {
@@ -104,42 +104,6 @@ void VulkanRHI::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSamp
     }
 
     vkBindImageMemory(device_->GetLogicalDeviceHandle(), image, image_memory, 0);
-}
-
-uint32 VulkanRHI::FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties)
-{
-    // GPU may offer different types of memory which differ in terms of allowed operations or performance.
-    // This function helps to find the available memory which suits our needs best.
-
-    // First query info about available memory types of the physical device
-    // VkPhysicalDeviceMemoryProperties::memoryHeaps -> distinct memory resources (e.g. dedicated VRAM or swap space in RAM when VRAM is depleted)
-    // VkPhysicalDeviceMemoryProperties::memoryTypes -> types which exist inside the memoryHeaps.
-    VkPhysicalDeviceMemoryProperties mem_properties;
-    vkGetPhysicalDeviceMemoryProperties(device_->GetPhysicalDeviceHandle(), &mem_properties);
-
-    // Then find a memory type that is suitable for the buffer itself
-    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++)
-    {
-        // type_filer specifies the bit field of memory types that are suitable
-        // -> We simply check if the bit is set for the memory types we want to accept
-        bool is_type_accepted = type_filter & (1 << i);
-        if (is_type_accepted)
-        {
-            // We also have to check for the properties of the memory!
-            // For example, we may want to be able to write to a vertex buffer from the CPU, so it has to support
-            // being mapped to the host.
-            // We may have multiple requested properties, so we have to use a bitwise AND operation to check if ALL properties are
-            // supported.
-            bool are_required_properties_supported = (mem_properties.memoryTypes[i].propertyFlags & properties) == properties;
-            if (are_required_properties_supported)
-            {
-                return i;
-            }
-        }
-    }
-
-    // Welp, we're screwed.
-    throw std::runtime_error("failed to find suitable memory type!");
 }
 
 void VulkanRHI::SelectAndInitDevice()

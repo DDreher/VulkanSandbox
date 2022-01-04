@@ -677,7 +677,7 @@ void VulkanRenderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = mem_requirements.size;
-    alloc_info.memoryTypeIndex = RHI_->FindMemoryType(mem_requirements.memoryTypeBits, properties);
+    alloc_info.memoryTypeIndex = RHI_->GetDevice()->FindMemoryType(mem_requirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(RHI_->GetDevice()->GetLogicalDeviceHandle(), &alloc_info, nullptr, &out_buffer_memory) != VK_SUCCESS)
     {

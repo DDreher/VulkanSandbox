@@ -29,8 +29,6 @@ public:
     void CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
 
-    uint32 FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties); // TODO: I guess this shouldn't be here... Maybe should be in device.
-
     const std::vector<char*>& GetInstanceExtensions() const
     {
         return instance_extensions_;

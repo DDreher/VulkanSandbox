@@ -116,6 +116,12 @@ public:
 
     VkFormat FindDepthFormat();
 
+    /**
+     * GPU may offer different types of memory which differ in terms of allowed operations or performance.
+     * This function helps to find the available memory which suits our needs best.
+     */
+    uint32 FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties);
+
 private:
     std::vector<const char*> GetRequiredExtensions() const;
     std::vector<const char*> GetRequiredValidationLayers() const;

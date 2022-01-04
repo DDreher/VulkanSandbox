@@ -303,6 +303,39 @@ VkFormat VulkanDevice::FindDepthFormat()
         VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
 }
 
+uint32 VulkanDevice::FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties)
+{
+    // First query info about available memory types of the physical device
+    // VkPhysicalDeviceMemoryProperties::memoryHeaps -> distinct memory resources (e.g. dedicated VRAM or swap space in RAM when VRAM is depleted)
+    // VkPhysicalDeviceMemoryProperties::memoryTypes -> types which exist inside the memoryHeaps.
+    VkPhysicalDeviceMemoryProperties mem_properties;
+    vkGetPhysicalDeviceMemoryProperties(physical_device_, &mem_properties);
+
+    // Then find a memory type that is suitable for the buffer itself
+    for (uint32_t i = 0; i < mem_properties.memoryTypeCount; i++)
+    {
+        // type_filer specifies the bit field of memory types that are suitable
+        // -> We simply check if the bit is set for the memory types we want to accept
+        bool is_type_accepted = type_filter & (1 << i);
+        if (is_type_accepted)
+        {
+            // We also have to check for the properties of the memory!
+            // For example, we may want to be able to write to a vertex buffer from the CPU, so it has to support
+            // being mapped to the host.
+            // We may have multiple requested properties, so we have to use a bitwise AND operation to check if ALL properties are
+            // supported.
+            bool are_required_properties_supported = (mem_properties.memoryTypes[i].propertyFlags & properties) == properties;
+            if (are_required_properties_supported)
+            {
+                return i;
+            }
+        }
+    }
+
+    // Welp, we're screwed.
+    throw std::runtime_error("failed to find suitable memory type!");
+}
+
 std::vector<const char*> VulkanDevice::GetRequiredExtensions() const
 {
     std::vector<const char*> required_extensions;
