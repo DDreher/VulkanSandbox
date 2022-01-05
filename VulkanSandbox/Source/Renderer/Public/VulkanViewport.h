@@ -4,6 +4,10 @@
 #include "VulkanRHI.h"
 #include "VulkanSwapChain.h"
 
+/**
+ * Thin abstraction to encapsulate all things needed to present something with Vulkan.
+ * Owns the swapchain and the corresponding image views
+ */
 class VulkanViewport
 {
 public:
