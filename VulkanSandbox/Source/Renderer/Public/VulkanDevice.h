@@ -122,6 +122,26 @@ public:
      */
     uint32 FindMemoryType(uint32 type_filter, VkMemoryPropertyFlags properties);
 
+    /**
+     * Retrieve max number of supported samples from the physical device.
+     * Takes into account both color and depth samples.
+     */
+    VkSampleCountFlagBits GetMaxNumSamples()
+    {
+        const VkPhysicalDeviceProperties& physical_device_properties = GetPhysicalDeviceProperties();
+
+        // We use depth buffering, so we have to account for both color and depth samples
+        VkSampleCountFlags sample_count_flags = physical_device_properties.limits.framebufferColorSampleCounts & physical_device_properties.limits.framebufferDepthSampleCounts;
+        if (sample_count_flags & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
+        if (sample_count_flags & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
+        if (sample_count_flags & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
+        if (sample_count_flags & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
+        if (sample_count_flags & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
+        if (sample_count_flags & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
+
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+
 private:
     std::vector<const char*> GetRequiredExtensions() const;
     std::vector<const char*> GetRequiredValidationLayers() const;

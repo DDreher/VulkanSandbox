@@ -1,8 +1,6 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-#include "VulkanCommandBufferPool.h"
-
 class VulkanQueue;
 class VulkanCommandBufferPool;
 class VulkanDevice;

@@ -11,44 +11,34 @@
 class VulkanViewport
 {
 public:
-    VulkanViewport(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanViewport(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
     ~VulkanViewport();
 
-    inline VulkanSwapChain* GetSwapChain() const
+    VulkanSwapChain* GetSwapChain() const
     {
         return swapchain_;
     }
 
-    inline uint32 GetWidth() const
+    uint32 GetWidth() const
     {
         return width_;
     }
 
-    inline uint32 GetHeight() const
+    uint32 GetHeight() const
     {
         return height_;
     }
 
-    const std::vector<VkImageView>& GetBackBufferImageViews() const
-    {
-        return backbuffer_image_views_;
-    }
-    
-    // TODO: I guess these shouldn't be public?
-    void CreateSwapchain();
-    void RecreateSwapchain();
     void DestroySwapchain();
 
 private:
     
     void Resize(uint32 width, uint32 height);
    
-    VulkanContext* RHI_ = nullptr;
+    VulkanDevice* device_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
     VulkanSwapChain* swapchain_ = nullptr;
     uint32 width_ = 0;
     uint32 height_ = 0;
-
-    std::vector<VkImageView> backbuffer_image_views_;   // Will be explicitly created by us -> We have to clean them up!
 };

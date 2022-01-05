@@ -1,14 +1,14 @@
 #include "VulkanSwapChain.h"
 
+#include "VulkanImage.h"
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
 
-VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
-    : RHI_(RHI),
+VulkanSwapChain::VulkanSwapChain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height)
+    : device_(device),
     surface_(surface)
 {
-    CHECK(RHI_ != nullptr);
-    CHECK(RHI_->GetDevice() != nullptr);
+    CHECK(device != nullptr);
     CHECK(surface_ != VK_NULL_HANDLE);
 
     SwapChainSupportDetails swapchain_support_details = QuerySwapChainSupport();
@@ -17,8 +17,7 @@ VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint3
     image_extent_ = ChooseImageExtent(swapchain_support_details.capabilities, width, height);
     uint32 num_images = ChooseNumberOfImages(swapchain_support_details.capabilities);
 
-    VkSwapchainCreateInfoKHR create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    VkSwapchainCreateInfoKHR create_info = { VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR };
     create_info.surface = surface_; // Swap chain is tied to this surface
     create_info.minImageCount = num_images;
     create_info.imageFormat = surface_format_.format;
@@ -36,20 +35,20 @@ VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint3
 
     // We can specify that a certain transform should be applied to images in the swap chain if it is supported
     // e.g. 90 degree clockwise rotation, horizontal flip,...
-    create_info.preTransform = swapchain_support_details.capabilities.currentTransform;    // Simply set currentTransform to specify that we don't use any preTransform.
+    create_info.preTransform = swapchain_support_details.capabilities.currentTransform;    // currentTransform  => we don't use any preTransform.
 
-    // Specify if the alpha channel should be used for blending with other windows in the window system
-    // VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR -> Ignore the alpha channel.
-    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    // Blending with other windows in the window system
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR => Ignore the alpha channel.
 
     // Specify how to handle swap chain images that will be used across multiple queue families 
     // E.g. if graphics queue is different from presentation queue, we'll draw onto images in swap chain from the graphics queue 
     // and then submit them to the presentation queue
     uint32 queue_family_indices[] = {
-                                      RHI_->GetDevice()->GetGraphicsQueue()->GetFamilyIndex(),
-                                      RHI_->GetDevice()->GetPresentQueue()->GetFamilyIndex()
+                                      device_->GetGraphicsQueue()->GetFamilyIndex(),
+                                      device_->GetPresentQueue()->GetFamilyIndex()
     };
-    if (RHI_->GetDevice()->GetGraphicsQueue()->GetFamilyIndex() != RHI_->GetDevice()->GetPresentQueue()->GetFamilyIndex())
+
+    if (device_->GetGraphicsQueue()->GetFamilyIndex() != device_->GetPresentQueue()->GetFamilyIndex())
     {
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;  // Images can be used across multiple queue families without explicit ownership transfers.
                                                                     // I check out ownership concepts at a later time, so for now we rely on concurrent mode.
@@ -60,10 +59,8 @@ VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint3
     }
     else
     {
-        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;   // An image is owned by one queue family at a time and ownership must be explicitly transferred 
-                                                                    // before using it in another queue family. This option offers the best performance.
-        create_info.queueFamilyIndexCount = 0; // Optional
-        create_info.pQueueFamilyIndices = nullptr; // Optional
+        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;   // An image is owned by one queue family and ownership must be explicitly transferred 
+                                                                    // before using it in another queue family => Best performance, more work.
     }
 
     // With Vulkan it's possible that the swap chain becomes invalid or unoptimized while the application is running (e.g. due to window resize).
@@ -73,25 +70,33 @@ VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint3
     LOG("Creating Vulkan swapchain (present mode: {}, format: {}, color space: {})",
         static_cast<uint32>(present_mode_), static_cast<uint32>(surface_format_.format), static_cast<uint32>(surface_format_.colorSpace));
 
-    VkResult result = vkCreateSwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_);
-    VERIFY_VK_RESULT(result);
-    if (result != VK_SUCCESS)
-    {
-        LOG_ERROR("Failed to create swap chain!");
-        exit(EXIT_FAILURE);
-    }
+    VERIFY_VK_RESULT(vkCreateSwapchainKHR(device_->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_));
 
-    // Retrieve image handles of swap chain.
-    // We only specified the minimum num of images => We have to check how much were created
+    // Retrieve image handles of swap chain (could be less than we requested)
     uint32 num_swapchain_images;
-    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr));
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(device_->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr));
     swap_chain_images_.resize(num_swapchain_images);
-    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data()));
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(device_->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data()));
+
+    // Create image views
+    swap_chain_image_views_.resize(swap_chain_images_.size());
+    for (size_t i = 0; i < swap_chain_image_views_.size(); ++i)
+    {
+        swap_chain_image_views_[i] = VulkanImage::CreateImageView(device_, swap_chain_images_[i], surface_format_.format, 1, 1,
+            VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT);
+    }
 }
 
 void VulkanSwapChain::Destroy()
 {
-    vkDestroySwapchainKHR(RHI_->GetDevice()->GetLogicalDeviceHandle(), swapchain_, nullptr);
+    // Destroy image views
+    for (auto image_view : swap_chain_image_views_)
+    {
+        vkDestroyImageView(device_->GetLogicalDeviceHandle(), image_view, nullptr);
+    }
+
+    // Images themselves are destroyed together with the swapchain
+    vkDestroySwapchainKHR(device_->GetLogicalDeviceHandle(), swapchain_, nullptr);
 }
 
 void VulkanSwapChain::Recreate()
@@ -102,20 +107,20 @@ void VulkanSwapChain::Recreate()
 SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
 {
     SwapChainSupportDetails details;
-    VkPhysicalDevice device = RHI_->GetDevice()->GetPhysicalDeviceHandle();
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.capabilities);
+    VkPhysicalDevice physical_device = device_->GetPhysicalDeviceHandle();
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface_, &details.capabilities);
 
     uint32_t surface_format_count;
-    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &surface_format_count, nullptr));
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface_, &surface_format_count, nullptr));
     details.surface_formats.resize(surface_format_count);
-    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &surface_format_count, details.surface_formats.data()));
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface_, &surface_format_count, details.surface_formats.data()));
 
     uint32_t present_mode_count;
-    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &present_mode_count, nullptr));
+    VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface_, &present_mode_count, nullptr));
     if (present_mode_count > 0)
     {
         details.present_modes.resize(present_mode_count);
-        VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &present_mode_count, details.present_modes.data()));
+        VERIFY_VK_RESULT(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface_, &present_mode_count, details.present_modes.data()));
     }
     else
     {
@@ -164,7 +169,7 @@ VkPresentModeKHR VulkanSwapChain::ChoosePresentMode(const std::vector<VkPresentM
         }
     }
 
-    LOG_WARN("VK_PRESENT_MODE_MAILBOX_KHR not supported. Falling back to first supported present mode ()",
+    LOG_WARN("VK_PRESENT_MODE_MAILBOX_KHR not supported. Falling back to first supported present mode ({})",
         static_cast<uint32>(available_present_modes[0]));
     return available_present_modes[0];
 }

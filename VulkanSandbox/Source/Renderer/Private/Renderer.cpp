@@ -38,7 +38,7 @@ void VulkanRenderer::Init(VulkanContext* VulkanCtx, GLFWwindow* window)
     CreateSurface(window);
     VulkanCtx->GetDevice()->InitPresentQueue(surface_);
 
-    viewport_ = new VulkanViewport(VulkanCtx_, surface_, framebuffer_width_, framebuffer_height_);
+    viewport_ = new VulkanViewport(VulkanCtx->GetDevice(), surface_, framebuffer_width_, framebuffer_height_);
 
     // Tell Vulkan about the framebuffer attachments that will be used while rendering
     // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
@@ -511,15 +511,16 @@ VkShaderModule VulkanRenderer::CreateShaderModule(const std::vector<char>& code)
 void VulkanRenderer::CreateFramebuffers()
 {
     // Create frame buffer for each image view in our swap chain
-    swap_chain_framebuffers_.resize(viewport_->GetBackBufferImageViews().size());
-    for (size_t i = 0; i < viewport_->GetBackBufferImageViews().size(); i++)
+    const std::vector<VkImageView> swap_chain_image_views = viewport_->GetSwapChain()->GetSwapChainImageViews();
+    swap_chain_framebuffers_.resize(swap_chain_image_views.size());
+    for (size_t i = 0; i < swap_chain_image_views.size(); i++)
     {
         // This has to be in the correct order, as specified in the render pass!
         std::array<VkImageView, 3> attachments =
         {
             color_image_view_,
             depth_image_view_,  // depth buffer can be used by all of the swap chain images, because only a single subpass is running at the same time
-            viewport_->GetBackBufferImageViews()[i] // Color attachment differs for every swap chain image
+            swap_chain_image_views[i] // Color attachment differs for every swap chain image
         };
 
         VkFramebufferCreateInfo frambuffer_info{};
@@ -1131,22 +1132,6 @@ void VulkanRenderer::CreateTextureSampler()
     {
         throw std::runtime_error("Failed to create texture sampler!");
     }
-}
-
-VkSampleCountFlagBits VulkanRenderer::GetMaxNumSamples()
-{
-    const VkPhysicalDeviceProperties& physical_device_properties = VulkanCtx_->GetDevice()->GetPhysicalDeviceProperties();
-
-    // We use depth buffering, so we have to account for both color and depth samples
-    VkSampleCountFlags counts = physical_device_properties.limits.framebufferColorSampleCounts & physical_device_properties.limits.framebufferDepthSampleCounts;
-    if (counts & VK_SAMPLE_COUNT_64_BIT) { return VK_SAMPLE_COUNT_64_BIT; }
-    if (counts & VK_SAMPLE_COUNT_32_BIT) { return VK_SAMPLE_COUNT_32_BIT; }
-    if (counts & VK_SAMPLE_COUNT_16_BIT) { return VK_SAMPLE_COUNT_16_BIT; }
-    if (counts & VK_SAMPLE_COUNT_8_BIT) { return VK_SAMPLE_COUNT_8_BIT; }
-    if (counts & VK_SAMPLE_COUNT_4_BIT) { return VK_SAMPLE_COUNT_4_BIT; }
-    if (counts & VK_SAMPLE_COUNT_2_BIT) { return VK_SAMPLE_COUNT_2_BIT; }
-
-    return VK_SAMPLE_COUNT_1_BIT;
 }
 
 void VulkanRenderer::LoadModel()

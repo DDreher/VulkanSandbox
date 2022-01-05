@@ -1,5 +1,5 @@
 #pragma once
-#include "vulkan/vulkan_core.h"
+#include <vulkan/vulkan_core.h>
 
 #include "VulkanContext.h"
 
@@ -13,7 +13,7 @@ struct SwapChainSupportDetails
 class VulkanSwapChain
 {
 public:
-    VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanSwapChain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
 
     void Destroy();
     void Recreate();
@@ -46,6 +46,11 @@ public:
         return swap_chain_images_;
     }
 
+    const std::vector<VkImageView>& GetSwapChainImageViews() const
+    {
+        return swap_chain_image_views_;
+    }
+
     inline VkSwapchainKHR GetHandle() const
     {
         return swapchain_;
@@ -58,7 +63,7 @@ private:
     VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height);
     uint32 ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities);
 
-    VulkanContext* RHI_ = nullptr;
+    VulkanDevice* device_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     
     VkSurfaceFormatKHR surface_format_;
@@ -66,5 +71,8 @@ private:
     VkExtent2D image_extent_;
 
     VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
-    std::vector<VkImage> swap_chain_images_;  // image handles will be automatically cleaned up by destruction of swap chain.
+
+    // We don't use the VulkanImage wrapper here, because the vkImage object are actually managed internally by the vkSwapchain!
+    std::vector<VkImage> swap_chain_images_;
+    std::vector<VkImageView> swap_chain_image_views_;
 };

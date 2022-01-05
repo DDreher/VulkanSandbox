@@ -90,8 +90,6 @@ private:
 
     void CreateTextureSampler();
 
-    VkSampleCountFlagBits GetMaxNumSamples();
-
     void LoadModel();
 
     void CreateVertexBuffer();
