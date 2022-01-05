@@ -22,10 +22,10 @@ public:
     */
     void Shutdown();
 
-    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips);
-
     void CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling,
         VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+
+    VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips);
 
     const std::vector<char*>& GetInstanceExtensions() const
     {
