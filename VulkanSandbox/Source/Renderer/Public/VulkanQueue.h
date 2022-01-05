@@ -1,5 +1,7 @@
 #pragma once
-#include "vulkan/vulkan_core.h"
+#include <vulkan/vulkan_core.h>
+
+#include "VulkanCommandBuffer.h"
 
 class VulkanDevice;
 
@@ -9,7 +11,7 @@ public:
     VulkanQueue(VulkanDevice* device, uint32 family_idx);
     ~VulkanQueue();
 
-    //Submit(FVulkanCmdBuffer* CmdBuffer, uint32 NumSignalSemaphores, VkSemaphore* SignalSemaphores);
+    void Submit(const VulkanCommandBuffer& command_buffer) const;
 
     VkQueue GetHandle() const
     {

@@ -14,6 +14,7 @@
 #include "VulkanQueue.h"
 #include "VulkanContext.h"
 #include "VulkanViewport.h"
+#include "VulkanCommandBuffer.h"
 
 void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
 {
@@ -696,34 +697,33 @@ void VulkanRenderer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
     // We may want to create a separate command pool for short-lived buffers so we can leverage some memory allocation optimizations.
     // For this we'd have to use the VK_COMMAND_POOL_CREATE_TRANSIENT_BIT 
 
-    VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+    VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
 
+    command_buffer.Begin();
     VkBufferCopy copy_region{};
     copy_region.srcOffset = 0; // Optional
     copy_region.dstOffset = 0; // Optional
     copy_region.size = size;
-    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
-
-    EndSingleTimeCommands(command_buffer);
+    vkCmdCopyBuffer(command_buffer.GetHandle(), src, dst, 1, &copy_region);
+    command_buffer.End();
+    
+    VulkanCtx_->GetDevice()->GetGraphicsQueue()->Submit(command_buffer);
 }
 
 void VulkanRenderer::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t num_mips)
 {
-    VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+    VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
 
     // One of the most common ways to perform layout transitions is to use an "image memory barrier" (or buffer memory barrier for buffers).
-    // A pipeline barrier like that is generally used to synchronize access to resources, like ensuring that a write to a buffer completes before reading from it,
-    // but it can also be used to transition image layouts and transfer queue family ownership when VK_SHARING_MODE_EXCLUSIVE is used.
+    // A pipeline barrier like that is generally used to synchronize access to resources, like ensuring that a write to a buffer completes
+    // before reading from it, but it can also be used to transition image layouts and transfer queue family ownership when VK_SHARING_MODE_EXCLUSIVE is used.
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
     barrier.image = image;
-
     barrier.oldLayout = old_layout; // use VK_IMAGE_LAYOUT_UNDEFINED if we don't care about existing contents of the image
     barrier.newLayout = new_layout;
     // NOTE: VK_IMAGE_LAYOUT_GENERAL allows all operations, but is not necessarily the most efficient layout.
     // For example, this is only needed for cases where we need to both read and write to/from an image
-
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;  // If we use the barrier to transfer queue family ownership these fields should be the indices of the queue families
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;  // Otherwise set to VK_QUEUE_FAMILY_IGNORED (<- THIS IS NOT THE DEFAULT VALUE! DON'T FORGET!)
 
@@ -731,7 +731,7 @@ void VulkanRenderer::TransitionImageLayout(VkImage image, VkFormat format, VkIma
     barrier.subresourceRange.baseArrayLayer = 0; // The image is no array
     barrier.subresourceRange.baseMipLevel = 0;
     barrier.subresourceRange.levelCount = num_mips;
-    barrier.subresourceRange.layerCount = 1;    // -> and only 1 layer
+    barrier.subresourceRange.layerCount = 1;
 
     // Ensure proper subresource aspect is used for depth images
     if (new_layout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
@@ -790,27 +790,30 @@ void VulkanRenderer::TransitionImageLayout(VkImage image, VkFormat format, VkIma
         throw std::invalid_argument("Unsupported layout transition!");
     }
 
+    command_buffer.Begin();
+
     // Submit the barrier. (All barriers use the same function!)
     // Allowed stage values are specified here:
     // https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-access-types-supported
     vkCmdPipelineBarrier(
-        command_buffer,
+        command_buffer.GetHandle(),
         source_stage,   // <- Specify in which pipeline stage the operations occur that should happen before the barrier
         dest_stage,     // <- Specify the pipeline stage in which operations will wait on the barrier, e.g. VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT if
                         // we want to read the uniform in the fragment shader after the barrier.
-        0,              // <- 0 or VK_DEPENDENCY_BY_REGION_BIT. Latter turns barrier into a per-region condition, i.e. the implementation is allowed to already begin reading parts
-                        // of the resource that was already written so far.
+        0,              // <- 0 or VK_DEPENDENCY_BY_REGION_BIT. Latter turns barrier into a per-region condition, i.e. the implementation is allowed
+                        // to already begin reading parts of the resource that was already written so far.
         0, nullptr,     // <- Reference arrays of pipeline barriers of the three available types: memory barriers
         0, nullptr,     // buffer memory barriers
         1, &barrier     // and image memory barriers 
     );
 
-    EndSingleTimeCommands(command_buffer);
+    command_buffer.End();
+    VulkanCtx_->GetDevice()->GetGraphicsQueue()->Submit(command_buffer);
 }
 
 void VulkanRenderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 {
-    VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+    VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
 
     // We need to specify which part of the buffer is going to be copied to which part of the image
     VkBufferImageCopy region{};
@@ -831,16 +834,17 @@ void VulkanRenderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t 
         1
     };
 
+    command_buffer.Begin();
     vkCmdCopyBufferToImage(
-        command_buffer,
+        command_buffer.GetHandle(),
         buffer,
         image,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,   // <- which layout the image is currently using
         1,
         &region
     );
-
-    EndSingleTimeCommands(command_buffer);
+    command_buffer.End();
+    VulkanCtx_->GetDevice()->GetGraphicsQueue()->Submit(command_buffer);
 }
 
 bool VulkanRenderer::HasStencilComponent(VkFormat format)
@@ -897,16 +901,16 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
     {
         // Alternatives:
         // 1. We could implement a function that searches common texture image formats for one that does support linear blitting
-        // 2. We could implement the mipmap generation in software with a library like stb_image_resize. We'd then load the image just as we loaded the original image.
-
+        // 2. We could implement the mipmap generation in software with a library like stb_image_resize. We'd then load the image just as we
+        // loaded the original image.
         // Note: Generating mipmaps at runtime is not very common. Usually they are precalculated and saved as texture next to the base texture.
         throw std::runtime_error("Texture image format does not support linear blitting!");
     }
 
-    VkCommandBuffer command_buffer = BeginSingleTimeCommands();
+    VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
+    command_buffer.Begin();
 
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
     barrier.image = image;
     barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -934,7 +938,8 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
 
-        vkCmdPipelineBarrier(command_buffer,
+        vkCmdPipelineBarrier(
+            command_buffer.GetHandle(),
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
             0, nullptr,
             0, nullptr,
@@ -955,7 +960,8 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
 
         // determines the region that data will be blitted to. 
         blit.dstOffsets[0] = { 0, 0, 0 };
-        blit.dstOffsets[1] = { mip_width > 1 ? mip_width / 2 : 1, mip_height > 1 ? mip_height / 2 : 1, 1 }; // Divide by two because each mip lvl is half the size of the prev mip level
+        blit.dstOffsets[1] = { mip_width > 1 ? mip_width / 2 : 1, mip_height > 1 ? mip_height / 2 : 1, 1 }; // Divide by two because each mip lvl is
+                                                                                                            // half the size of the prev mip level
 
         blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         blit.dstSubresource.mipLevel = i;   // the destination mip level
@@ -965,7 +971,8 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
         // Record the blit command
         // srcImage and dstImage are the same because we're blitting between different levels of the same image
         // TODO: once we use a dedicated transfer queue, this command must be submitted to a queue with graphics capability
-        vkCmdBlitImage(command_buffer,
+        vkCmdBlitImage(
+            command_buffer.GetHandle(),
             image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             1, &blit,
@@ -979,7 +986,8 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
         barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-        vkCmdPipelineBarrier(command_buffer,
+        vkCmdPipelineBarrier(
+            command_buffer.GetHandle(),
             VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
             0, nullptr,
             0, nullptr,
@@ -1005,13 +1013,15 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
     barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
-    vkCmdPipelineBarrier(command_buffer,
+    vkCmdPipelineBarrier(
+        command_buffer.GetHandle(),
         VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
         0, nullptr,
         0, nullptr,
         1, &barrier);
 
-    EndSingleTimeCommands(command_buffer);
+    command_buffer.End();
+    VulkanCtx_->GetDevice()->GetGraphicsQueue()->Submit(command_buffer);
 }
 
 void VulkanRenderer::CreateTextureImage()

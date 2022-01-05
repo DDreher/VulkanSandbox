@@ -11,7 +11,6 @@
 #include "VulkanRenderPass.h"
 #include "VulkanContext.h"
 #include "VulkanViewport.h"
-#include "VulkanCommandBufferPool.h"
 #include "VulkanCommandBuffer.h"
 
 struct GLFWwindow;
@@ -65,7 +64,6 @@ private:
     void CreateFramebuffers();
 
     VkCommandBuffer BeginSingleTimeCommands();
-
     void EndSingleTimeCommands(VkCommandBuffer command_buffer);
 
     void FillCommandBuffers();
