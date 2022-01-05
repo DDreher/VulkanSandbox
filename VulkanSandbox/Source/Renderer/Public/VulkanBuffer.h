@@ -23,8 +23,6 @@ public:
     }
 
 private:
-    static uint32 FindMemoryType(VulkanDevice* device, uint32 type_filter, VkMemoryPropertyFlags properties);
-
     VulkanDevice* device_ = nullptr;
     VkDeviceMemory memory_handle_ = VK_NULL_HANDLE;
     VkBuffer buffer_handle_ = VK_NULL_HANDLE;

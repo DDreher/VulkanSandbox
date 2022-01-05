@@ -36,7 +36,7 @@ VulkanBuffer VulkanBuffer::Create(VulkanDevice* device, const VkDeviceSize& size
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = mem_requirements.size;
-    alloc_info.memoryTypeIndex = FindMemoryType(device, mem_requirements.memoryTypeBits, properties);
+    alloc_info.memoryTypeIndex = device->FindMemoryType(mem_requirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(device->GetLogicalDeviceHandle(), &alloc_info, nullptr, &out_buffer.memory_handle_) != VK_SUCCESS)
     {
@@ -44,7 +44,7 @@ VulkanBuffer VulkanBuffer::Create(VulkanDevice* device, const VkDeviceSize& size
         exit(EXIT_FAILURE);
     }
 
-    // Finally associate the allocated memory with the vertex buffer
+    // Finally associate the allocated memory with the buffer
     vkBindBufferMemory(device->GetLogicalDeviceHandle(), out_buffer.buffer_handle_, out_buffer.memory_handle_, 0 /*offset within the memory*/);
 
     return out_buffer;
