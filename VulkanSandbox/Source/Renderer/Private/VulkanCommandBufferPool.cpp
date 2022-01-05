@@ -1,17 +1,13 @@
 #include "VulkanCommandBufferPool.h"
 #include "VulkanMacros.h"
 
-VulkanCommandBufferPool::VulkanCommandBufferPool(VulkanDevice* device, VkCommandPoolCreateFlags flags)
+VulkanCommandBufferPool::VulkanCommandBufferPool(VulkanDevice* device, VulkanQueue* queue, const VkCommandPoolCreateFlags& flags)
     : device_(device)
 {
     CHECK(device != nullptr);
-
-    VkCommandPoolCreateInfo cmd_pool_create_info{};
-    cmd_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-
-    // For now we only use drawing commands, so we stick to the graphics queue family.
-    // TODO: Expose a way to create pools for other queue types.
-    cmd_pool_create_info.queueFamilyIndex = device->GetGraphicsQueue()->GetFamilyIndex();   
+    CHECK(queue != nullptr);
+    VkCommandPoolCreateInfo cmd_pool_create_info = { VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO };
+    cmd_pool_create_info.queueFamilyIndex = queue->GetFamilyIndex();   
     cmd_pool_create_info.flags = flags; // Optional.
                                         // VK_COMMAND_POOL_CREATE_TRANSIENT_BIT: Command buffers are rerecorded with new commands very often
                                         // (may change memory allocation behavior)

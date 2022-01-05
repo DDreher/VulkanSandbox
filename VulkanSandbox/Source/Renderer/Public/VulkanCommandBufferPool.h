@@ -13,7 +13,7 @@
 class VulkanCommandBufferPool
 {
 public:
-    VulkanCommandBufferPool(VulkanDevice* device, VkCommandPoolCreateFlags flags = 0);
+    VulkanCommandBufferPool(VulkanDevice* device, VulkanQueue* queue, const VkCommandPoolCreateFlags& flags = 0);
     ~VulkanCommandBufferPool();
 
     inline VkCommandPool GetHandle() const

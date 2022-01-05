@@ -4,6 +4,9 @@
 #include "VulkanInstance.h"
 #include "VulkanDevice.h"
 
+/**
+ * Owner of all application specific Vulkan resources
+ */
 class VulkanContext
 {
 public:

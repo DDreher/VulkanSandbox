@@ -49,7 +49,7 @@ void VulkanRenderer::Init(VulkanContext* RHI, GLFWwindow* window)
 
     CreateGraphicsPipeline(); // Configure stages of the render pipeline
 
-    command_buffer_pool_ = new VulkanCommandBufferPool(RHI->GetDevice());
+    command_buffer_pool_ = new VulkanCommandBufferPool(RHI->GetDevice(), RHI->GetDevice()->GetGraphicsQueue());
 
     // Init resources for MSAA
     CreateColorResources();
