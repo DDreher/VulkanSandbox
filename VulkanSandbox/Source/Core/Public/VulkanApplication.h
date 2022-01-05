@@ -13,10 +13,11 @@ public:
     void Run();
 
 private:
-    void InitWindow();
     void MainLoop();
     void Cleanup();
 
+    void InitWindow();
+    void DestroyWindow();
     static void WindowResizeCallback(GLFWwindow* window, int width, int height);
 
     void Update(float delta);

@@ -11,6 +11,13 @@ void VulkanApplication::Run()
     Cleanup();
 }
 
+void VulkanApplication::Cleanup()
+{
+    renderer_.Cleanup();
+    RHI_.Shutdown();
+    DestroyWindow();
+}
+
 void VulkanApplication::InitWindow()
 {
     glfwInit();
@@ -20,13 +27,11 @@ void VulkanApplication::InitWindow()
     glfwSetFramebufferSizeCallback(window_, WindowResizeCallback);
 }
 
-void VulkanApplication::Cleanup()
+void VulkanApplication::DestroyWindow()
 {
-    renderer_.Cleanup();
-    RHI_.Shutdown();
-
     // Clean up glfw
     glfwDestroyWindow(window_);
+    window_ = nullptr;
     glfwTerminate();
 }
 
