@@ -198,9 +198,10 @@ void VulkanRenderer::CleanUpSwapChain()
 
 void VulkanRenderer::RecreateSwapChain()
 {
+    // TODO: Refactoring.
     CHECK_NO_ENTRY();
-    /* TODO: Refactoring.
 
+    /* 
     // In case we minimize the frame buffer will have size 0.
     // -> We pause the application until it has a frame buffer with a valid size again.
     // TODO: Get rid of the glfw stuff. Ideally the renderer should be agnostic to glfw / sdl or whatever we use to create the window.
