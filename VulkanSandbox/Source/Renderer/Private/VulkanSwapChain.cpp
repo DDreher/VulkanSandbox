@@ -96,7 +96,7 @@ void VulkanSwapChain::Destroy()
 
 void VulkanSwapChain::Recreate()
 {
-
+    // TODO
 }
 
 SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
