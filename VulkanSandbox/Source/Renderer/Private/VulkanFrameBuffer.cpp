@@ -2,7 +2,7 @@
 
 #include "VulkanMacros.h"
 
-VulkanFrameBuffer::VulkanFrameBuffer(VulkanRHI* RHI, uint32 width, uint32 height, VkRenderPass render_pass, const std::vector<VkImageView>& attachments)
+VulkanFrameBuffer::VulkanFrameBuffer(VulkanContext* RHI, uint32 width, uint32 height, VkRenderPass render_pass, const std::vector<VkImageView>& attachments)
     : RHI_(RHI)
 {
     // This has to be in the correct order, as specified in the render pass!

@@ -5,7 +5,7 @@
 
 #include "Renderer.h"
 #include "TickTimer.h"
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 
 class VulkanApplication
 {
@@ -32,6 +32,6 @@ private:
 
     TickTimer tick_timer_;
 
-    VulkanRHI RHI_;
+    VulkanContext RHI_;
     VulkanRenderer renderer_;
 };

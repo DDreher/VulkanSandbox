@@ -1,5 +1,7 @@
 #include "VulkanBuffer.h"
 
+#include <vulkan/vulkan.hpp>
+
 #include "VulkanDevice.h"
 
 VulkanBuffer VulkanBuffer::Create(VulkanDevice* device, const VkDeviceSize& size, const VkBufferUsageFlags& usage, const VkMemoryPropertyFlags& properties)
@@ -8,8 +10,7 @@ VulkanBuffer VulkanBuffer::Create(VulkanDevice* device, const VkDeviceSize& size
     out_buffer.device_ = device;
     out_buffer.size = size;
 
-    VkBufferCreateInfo buffer_info{};
-    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    VkBufferCreateInfo buffer_info = { VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
     buffer_info.size = size;
     buffer_info.usage = usage; // Specify how the buffer is used. Can be multiple with bitwise or.
     buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;    // Buffers can be owned by specific queue families or shared between multiple queue families.

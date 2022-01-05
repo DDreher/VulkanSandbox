@@ -3,7 +3,7 @@
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
 
-VulkanSwapChain::VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
+VulkanSwapChain::VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
     : RHI_(RHI),
     surface_(surface)
 {

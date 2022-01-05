@@ -1,7 +1,7 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 
 struct SwapChainSupportDetails
 {
@@ -13,7 +13,7 @@ struct SwapChainSupportDetails
 class VulkanSwapChain
 {
 public:
-    VulkanSwapChain(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanSwapChain(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
 
     void Destroy();
     void Recreate();
@@ -58,7 +58,7 @@ private:
     VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height);
     uint32 ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities);
 
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
     
     VkSurfaceFormatKHR surface_format_;

@@ -1,14 +1,14 @@
 #pragma once
-#include "vulkan/vulkan_core.h"
+#include <vulkan/vulkan_core.h>
 
 #include "VulkanInstance.h"
 #include "VulkanDevice.h"
 
-class VulkanRHI
+class VulkanContext
 {
 public:
-    VulkanRHI();
-    ~VulkanRHI() {};
+    VulkanContext();
+    ~VulkanContext() {};
 
     /**
     *    Initializes the RHI using Vulkan as backend.

@@ -9,7 +9,7 @@
 #include "Vertex.h"
 #include "VulkanBuffer.h"
 #include "VulkanRenderPass.h"
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanViewport.h"
 #include "VulkanCommandBufferPool.h"
 #include "VulkanCommandBuffer.h"
@@ -35,7 +35,7 @@ struct UniformBufferObject
 class VulkanRenderer
 {
 public:
-    void Init(VulkanRHI* RHI, GLFWwindow* window);
+    void Init(VulkanContext* RHI, GLFWwindow* window);
     void OnFrameBufferResize(uint32_t width, uint32_t height);
     void DrawFrame();
     void Cleanup();
@@ -196,7 +196,7 @@ private:
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
 
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
     VulkanViewport* viewport_ = nullptr;
     VulkanRenderPass* render_pass_ = nullptr;
 };

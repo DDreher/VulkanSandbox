@@ -12,7 +12,7 @@
 #include "VulkanDevice.h"
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanViewport.h"
 
 void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
@@ -22,7 +22,7 @@ void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
     framebuffer_height_ = height;
 }
 
-void VulkanRenderer::Init(VulkanRHI* RHI, GLFWwindow* window)
+void VulkanRenderer::Init(VulkanContext* RHI, GLFWwindow* window)
 {
     CHECK(window != nullptr);
     RHI_ = RHI;

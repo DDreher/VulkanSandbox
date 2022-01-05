@@ -1,10 +1,10 @@
 #include "VulkanViewport.h"
 
 #include "VulkanSwapChain.h"
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanMacros.h"
 
-VulkanViewport::VulkanViewport(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
+VulkanViewport::VulkanViewport(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height)
     : RHI_(RHI),
     surface_(surface),
     width_(width),

@@ -1,10 +1,10 @@
 #pragma once
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 
 class VulkanFrameBuffer
 {
 public:
-    VulkanFrameBuffer(VulkanRHI* RHI, uint32 width, uint32 height, VkRenderPass render_pass, const std::vector<VkImageView>& attachments);
+    VulkanFrameBuffer(VulkanContext* RHI, uint32 width, uint32 height, VkRenderPass render_pass, const std::vector<VkImageView>& attachments);
     ~VulkanFrameBuffer();
 
     void Destroy();
@@ -15,7 +15,7 @@ public:
     }
 
 private: 
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
 
     VkFramebuffer handle_ = VK_NULL_HANDLE;
 };

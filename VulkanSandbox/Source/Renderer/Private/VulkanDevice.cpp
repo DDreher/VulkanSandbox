@@ -4,10 +4,10 @@
 #include "VulkanMacros.h"
 #include "VulkanPlatform.h"
 #include "VulkanQueue.h"
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanUtils.h"
 
-VulkanDevice::VulkanDevice(VulkanRHI* RHI, VkPhysicalDevice physical_device, int32 device_idx)
+VulkanDevice::VulkanDevice(VulkanContext* RHI, VkPhysicalDevice physical_device, int32 device_idx)
     : RHI_(RHI),
     physical_device_(physical_device),
     device_idx_(device_idx)

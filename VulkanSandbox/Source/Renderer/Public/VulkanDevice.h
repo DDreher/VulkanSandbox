@@ -3,7 +3,7 @@
 
 #include "VulkanQueue.h"
 
-class VulkanRHI;
+class VulkanContext;
 
 struct QueueFamilyIndices
 {
@@ -26,7 +26,7 @@ struct DeviceCreationProperties
 class VulkanDevice 
 {
 public:
-    VulkanDevice(VulkanRHI* RHI, VkPhysicalDevice physical_device, int32 device_idx);
+    VulkanDevice(VulkanContext* RHI, VkPhysicalDevice physical_device, int32 device_idx);
     ~VulkanDevice();
 
     void Destroy();
@@ -127,7 +127,7 @@ private:
     std::vector<const char*> GetRequiredValidationLayers() const;
     QueueFamilyIndices GetQueueFamilyIndices(uint32_t requested_family_flags) const;
 
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
     int32 device_idx_ = -1;
     bool is_discrete_ = false;
 

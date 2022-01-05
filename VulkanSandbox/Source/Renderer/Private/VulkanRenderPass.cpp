@@ -1,6 +1,6 @@
 #include "VulkanRenderPass.h"
 
-VulkanRenderPass::VulkanRenderPass(VulkanRHI* RHI, VulkanSwapChain* swapchain)
+VulkanRenderPass::VulkanRenderPass(VulkanContext* RHI, VulkanSwapChain* swapchain)
     : RHI_(RHI)
 {
     CHECK(RHI != nullptr);

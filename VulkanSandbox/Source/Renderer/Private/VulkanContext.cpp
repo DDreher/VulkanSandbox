@@ -1,20 +1,20 @@
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 
 #include "vulkan/vulkan_core.h"
 
 #include "VulkanMacros.h"
 
-VulkanRHI::VulkanRHI()
+VulkanContext::VulkanContext()
 {
 }
 
-void VulkanRHI::Init()
+void VulkanContext::Init()
 {
     instance_.Init();
     SelectAndInitDevice();
 }
 
-void VulkanRHI::Shutdown()
+void VulkanContext::Shutdown()
 {
     for(size_t i=0; i<found_devices_.size(); ++i)
     {
@@ -30,7 +30,7 @@ void VulkanRHI::Shutdown()
     instance_.Shutdown();
 }
 
-VkImageView VulkanRHI::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips)
+VkImageView VulkanContext::CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t num_mips)
 {
     CHECK(device_ != nullptr);
     CHECK(device_->GetLogicalDeviceHandle() != VK_NULL_HANDLE);
@@ -59,7 +59,7 @@ VkImageView VulkanRHI::CreateImageView(VkImage image, VkFormat format, VkImageAs
     return image_view;
 }
 
-void VulkanRHI::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
+void VulkanContext::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
 {
     VkImageCreateInfo image_info{};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -106,7 +106,7 @@ void VulkanRHI::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSamp
     vkBindImageMemory(device_->GetLogicalDeviceHandle(), image, image_memory, 0);
 }
 
-void VulkanRHI::SelectAndInitDevice()
+void VulkanContext::SelectAndInitDevice()
 {
     uint32 gpu_count = 0;
     VkResult result = vkEnumeratePhysicalDevices(instance_.GetHandle(), &gpu_count, nullptr);

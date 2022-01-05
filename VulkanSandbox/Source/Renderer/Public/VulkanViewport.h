@@ -1,7 +1,7 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
 
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanSwapChain.h"
 
 /**
@@ -11,7 +11,7 @@
 class VulkanViewport
 {
 public:
-    VulkanViewport(VulkanRHI* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanViewport(VulkanContext* RHI, VkSurfaceKHR surface, uint32 width, uint32 height);
     ~VulkanViewport();
 
     inline VulkanSwapChain* GetSwapChain() const
@@ -43,7 +43,7 @@ private:
     
     void Resize(uint32 width, uint32 height);
    
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
     VulkanSwapChain* swapchain_ = nullptr;

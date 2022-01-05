@@ -1,7 +1,7 @@
 #pragma once
 #include "vulkan/vulkan_core.h"
  
-#include "VulkanRHI.h"
+#include "VulkanContext.h"
 #include "VulkanSwapChain.h"
 
 struct DepthStencilAttachmentInfo
@@ -27,7 +27,7 @@ struct RenderPassInfo
 class VulkanRenderPass
 {
 public:
-    VulkanRenderPass(VulkanRHI* RHI, VulkanSwapChain* swapchain);
+    VulkanRenderPass(VulkanContext* RHI, VulkanSwapChain* swapchain);
     ~VulkanRenderPass();
 
     inline VkRenderPass GetHandle() const
@@ -37,5 +37,5 @@ public:
 
 private:
     VkRenderPass render_pass_ = VK_NULL_HANDLE;
-    VulkanRHI* RHI_ = nullptr;
+    VulkanContext* RHI_ = nullptr;
 };
