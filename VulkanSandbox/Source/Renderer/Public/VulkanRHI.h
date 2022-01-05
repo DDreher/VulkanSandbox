@@ -16,8 +16,6 @@ public:
     */
     void Init();
 
-    //void PostInit();
-
     /**
     *    Cleans up the RHI.
     *    Destroys devices.
