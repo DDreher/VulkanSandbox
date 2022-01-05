@@ -3,17 +3,17 @@
 
 #include "VulkanContext.h"
 
-struct SwapChainSupportDetails
+struct SwapchainSupportDetails
 {
     VkSurfaceCapabilitiesKHR capabilities;  // min/max number of images in swap chain, min/max width and height of images
     std::vector<VkSurfaceFormatKHR> surface_formats;    // pixel format, color space
     std::vector<VkPresentModeKHR> present_modes;    // conditions for "swapping" images to the screen
 };
 
-class VulkanSwapChain
+class VulkanSwapchain
 {
 public:
-    VulkanSwapChain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
 
     void Destroy();
     void Recreate();
@@ -21,7 +21,7 @@ public:
     const std::vector<VkImage>& GetSwapChainImages()
     {
         CHECK(swapchain_ != VK_NULL_HANDLE);
-        return swap_chain_images_;
+        return swapchain_images_;
     }
 
     VkSurfaceFormatKHR GetSurfaceFormat() const
@@ -43,12 +43,12 @@ public:
 
     const std::vector<VkImage>& GetSwapChainImages() const
     {
-        return swap_chain_images_;
+        return swapchain_images_;
     }
 
     const std::vector<VkImageView>& GetSwapChainImageViews() const
     {
-        return swap_chain_image_views_;
+        return swapchain_image_views_;
     }
 
     inline VkSwapchainKHR GetHandle() const
@@ -57,7 +57,7 @@ public:
     }
 
 private:
-    SwapChainSupportDetails QuerySwapChainSupport();
+    SwapchainSupportDetails QuerySwapChainSupport();
     VkSurfaceFormatKHR ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats);
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
     VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height);
@@ -73,6 +73,6 @@ private:
     VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
 
     // We don't use the VulkanImage wrapper here, because the vkImage object are actually managed internally by the vkSwapchain!
-    std::vector<VkImage> swap_chain_images_;
-    std::vector<VkImageView> swap_chain_image_views_;
+    std::vector<VkImage> swapchain_images_;
+    std::vector<VkImageView> swapchain_image_views_;
 };

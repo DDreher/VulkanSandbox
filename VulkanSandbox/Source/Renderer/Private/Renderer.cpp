@@ -9,12 +9,13 @@
 #include <tiny_obj_loader.h>
 
 #include "FileIO.h"
+#include "VulkanCommandBuffer.h"
+#include "VulkanContext.h"
 #include "VulkanDevice.h"
+#include "VulkanFrameBuffer.h"
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
-#include "VulkanContext.h"
 #include "VulkanViewport.h"
-#include "VulkanCommandBuffer.h"
 
 void VulkanRenderer::OnFrameBufferResize(uint32_t width, uint32_t height)
 {
@@ -85,7 +86,7 @@ void VulkanRenderer::Init(VulkanContext* VulkanCtx, GLFWwindow* window)
 
     // Create command buffers
     // Because one of the drawing commands involves binding the right VkFramebuffer, we have to record a command buffer for every image in the swap chain.
-    command_buffers_.resize(swap_chain_framebuffers_.size());
+    command_buffers_.resize(swapchain_framebuffers.size());
     for (size_t i = 0; i < command_buffers_.size(); ++i)
     {
         command_buffers_[i] = new VulkanCommandBuffer(VulkanCtx->GetDevice(), command_buffer_pool_);
@@ -166,7 +167,7 @@ void VulkanRenderer::CleanUpSwapChain()
     vkDestroyImage(VulkanCtx_->GetDevice()->GetLogicalDeviceHandle(), depth_image_, nullptr);
     vkFreeMemory(VulkanCtx_->GetDevice()->GetLogicalDeviceHandle(), depth_image_memory_, nullptr);
 
-    for (auto framebuffer : swap_chain_framebuffers_)
+    for (auto framebuffer : swapchain_framebuffers)
     {
         vkDestroyFramebuffer(VulkanCtx_->GetDevice()->GetLogicalDeviceHandle(), framebuffer, nullptr);
     }
@@ -511,32 +512,20 @@ VkShaderModule VulkanRenderer::CreateShaderModule(const std::vector<char>& code)
 void VulkanRenderer::CreateFramebuffers()
 {
     // Create frame buffer for each image view in our swap chain
-    const std::vector<VkImageView> swap_chain_image_views = viewport_->GetSwapChain()->GetSwapChainImageViews();
-    swap_chain_framebuffers_.resize(swap_chain_image_views.size());
-    for (size_t i = 0; i < swap_chain_image_views.size(); i++)
+    const std::vector<VkImageView> swapchain_image_views = viewport_->GetSwapChain()->GetSwapChainImageViews();
+    swapchain_framebuffers.resize(swapchain_image_views.size());
+    for (size_t i = 0; i < swapchain_image_views.size(); i++)
     {
         // This has to be in the correct order, as specified in the render pass!
-        std::array<VkImageView, 3> attachments =
+        std::vector<VkImageView> attachments =
         {
             color_image_view_,
             depth_image_view_,  // depth buffer can be used by all of the swap chain images, because only a single subpass is running at the same time
-            swap_chain_image_views[i] // Color attachment differs for every swap chain image
+            swapchain_image_views[i] // Color attachment differs for every swap chain image
         };
 
-        VkFramebufferCreateInfo frambuffer_info{};
-        frambuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-        frambuffer_info.renderPass = render_pass_->GetHandle();  // Framebuffer needs to be compatible with this render pass -> Use same number and types of attachments
-        frambuffer_info.attachmentCount = static_cast<uint32_t>(attachments.size());
-        frambuffer_info.pAttachments = attachments.data(); // Specify the VkImageView objects that should be bound to the respective attachment descriptions
-                                                           // in the render pass pAttachment array.
-        frambuffer_info.width = viewport_->GetWidth();
-        frambuffer_info.height = viewport_->GetHeight();
-        frambuffer_info.layers = 1; // swap chain images are single images -> 1 layer.
-
-        if (vkCreateFramebuffer(VulkanCtx_->GetDevice()->GetLogicalDeviceHandle(), &frambuffer_info, nullptr, &swap_chain_framebuffers_[i]) != VK_SUCCESS)
-        {
-            throw std::runtime_error("Failed to create framebuffer!");
-        }
+        swapchain_framebuffers[i] = VulkanFrameBuffer::Create(VulkanCtx_->GetDevice(), viewport_->GetWidth(), viewport_->GetHeight(),
+            attachments, *render_pass_);
     }
 }
 
@@ -607,7 +596,7 @@ void VulkanRenderer::FillCommandBuffers()
         VkRenderPassBeginInfo render_pass_info{};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_info.renderPass = render_pass_->GetHandle();
-        render_pass_info.framebuffer = swap_chain_framebuffers_[i];
+        render_pass_info.framebuffer = swapchain_framebuffers[i];
         render_pass_info.renderArea.offset = { 0, 0 };
         render_pass_info.renderArea.extent = {viewport_->GetWidth(), viewport_->GetHeight()};    // Pixels outside this region will have undefined values.
                                                                     // It should match the size of the attachments for best performance.

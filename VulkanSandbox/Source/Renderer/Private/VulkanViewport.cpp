@@ -1,6 +1,6 @@
 #include "VulkanViewport.h"
 
-#include "VulkanSwapChain.h"
+#include "VulkanSwapchain.h"
 #include "VulkanContext.h"
 #include "VulkanMacros.h"
 
@@ -12,7 +12,7 @@ VulkanViewport::VulkanViewport(VulkanDevice* device, VkSurfaceKHR surface, uint3
 {
     CHECK(device != nullptr);
     CHECK(surface != VK_NULL_HANDLE);
-    swapchain_ = new VulkanSwapChain(device, surface_, width_, height_);
+    swapchain_ = new VulkanSwapchain(device, surface_, width_, height_);
 }
 
 VulkanViewport::~VulkanViewport()

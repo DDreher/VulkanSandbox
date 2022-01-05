@@ -2,7 +2,7 @@
 #include "vulkan/vulkan_core.h"
  
 #include "VulkanContext.h"
-#include "VulkanSwapChain.h"
+#include "VulkanSwapchain.h"
 
 struct DepthStencilAttachmentInfo
 {
@@ -27,7 +27,7 @@ struct RenderPassInfo
 class VulkanRenderPass
 {
 public:
-    VulkanRenderPass(VulkanContext* RHI, VulkanSwapChain* swapchain);
+    VulkanRenderPass(VulkanContext* RHI, VulkanSwapchain* swapchain);
     ~VulkanRenderPass();
 
     inline VkRenderPass GetHandle() const

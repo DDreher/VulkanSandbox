@@ -1,21 +1,11 @@
 #pragma once
-#include "VulkanContext.h"
+#include <vulkan/vulkan_core.h>
 
-class VulkanFrameBuffer
+#include "VulkanDevice.h"
+#include "VulkanRenderPass.h"
+
+struct VulkanFrameBuffer
 {
-public:
-    VulkanFrameBuffer(VulkanContext* RHI, uint32 width, uint32 height, VkRenderPass render_pass, const std::vector<VkImageView>& attachments);
-    ~VulkanFrameBuffer();
-
-    void Destroy();
-
-    inline VkFramebuffer GetHandle()
-    {
-        return handle_;
-    }
-
-private: 
-    VulkanContext* RHI_ = nullptr;
-
-    VkFramebuffer handle_ = VK_NULL_HANDLE;
+    static VkFramebuffer Create(VulkanDevice* device, uint32 width, uint32 height,
+        const std::vector<VkImageView>& views, const VulkanRenderPass& render_pass);
 };

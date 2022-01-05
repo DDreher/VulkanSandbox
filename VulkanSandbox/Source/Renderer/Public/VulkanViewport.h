@@ -2,7 +2,7 @@
 #include "vulkan/vulkan_core.h"
 
 #include "VulkanContext.h"
-#include "VulkanSwapChain.h"
+#include "VulkanSwapchain.h"
 
 /**
  * Thin abstraction to encapsulate all things needed to present something with Vulkan.
@@ -14,7 +14,7 @@ public:
     VulkanViewport(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
     ~VulkanViewport();
 
-    VulkanSwapChain* GetSwapChain() const
+    VulkanSwapchain* GetSwapChain() const
     {
         return swapchain_;
     }
@@ -38,7 +38,7 @@ private:
     VulkanDevice* device_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
-    VulkanSwapChain* swapchain_ = nullptr;
+    VulkanSwapchain* swapchain_ = nullptr;
     uint32 width_ = 0;
     uint32 height_ = 0;
 };

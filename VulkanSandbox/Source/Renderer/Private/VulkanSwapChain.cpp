@@ -1,17 +1,17 @@
-#include "VulkanSwapChain.h"
+#include "VulkanSwapchain.h"
 
 #include "VulkanImage.h"
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
 
-VulkanSwapChain::VulkanSwapChain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height)
+VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height)
     : device_(device),
     surface_(surface)
 {
     CHECK(device != nullptr);
     CHECK(surface_ != VK_NULL_HANDLE);
 
-    SwapChainSupportDetails swapchain_support_details = QuerySwapChainSupport();
+    SwapchainSupportDetails swapchain_support_details = QuerySwapChainSupport();
     surface_format_ = ChooseSurfaceFormat(swapchain_support_details.surface_formats);
     present_mode_ = ChoosePresentMode(swapchain_support_details.present_modes);
     image_extent_ = ChooseImageExtent(swapchain_support_details.capabilities, width, height);
@@ -75,22 +75,22 @@ VulkanSwapChain::VulkanSwapChain(VulkanDevice* device, VkSurfaceKHR surface, uin
     // Retrieve image handles of swap chain (could be less than we requested)
     uint32 num_swapchain_images;
     VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(device_->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, nullptr));
-    swap_chain_images_.resize(num_swapchain_images);
-    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(device_->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swap_chain_images_.data()));
+    swapchain_images_.resize(num_swapchain_images);
+    VERIFY_VK_RESULT(vkGetSwapchainImagesKHR(device_->GetLogicalDeviceHandle(), swapchain_, &num_swapchain_images, swapchain_images_.data()));
 
     // Create image views
-    swap_chain_image_views_.resize(swap_chain_images_.size());
-    for (size_t i = 0; i < swap_chain_image_views_.size(); ++i)
+    swapchain_image_views_.resize(swapchain_images_.size());
+    for (size_t i = 0; i < swapchain_image_views_.size(); ++i)
     {
-        swap_chain_image_views_[i] = VulkanImage::CreateImageView(device_, swap_chain_images_[i], surface_format_.format, 1, 1,
+        swapchain_image_views_[i] = VulkanImage::CreateImageView(device_, swapchain_images_[i], surface_format_.format, 1, 1,
             VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT);
     }
 }
 
-void VulkanSwapChain::Destroy()
+void VulkanSwapchain::Destroy()
 {
     // Destroy image views
-    for (auto image_view : swap_chain_image_views_)
+    for (auto image_view : swapchain_image_views_)
     {
         vkDestroyImageView(device_->GetLogicalDeviceHandle(), image_view, nullptr);
     }
@@ -99,14 +99,14 @@ void VulkanSwapChain::Destroy()
     vkDestroySwapchainKHR(device_->GetLogicalDeviceHandle(), swapchain_, nullptr);
 }
 
-void VulkanSwapChain::Recreate()
+void VulkanSwapchain::Recreate()
 {
     // TODO
 }
 
-SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
+SwapchainSupportDetails VulkanSwapchain::QuerySwapChainSupport()
 {
-    SwapChainSupportDetails details;
+    SwapchainSupportDetails details;
     VkPhysicalDevice physical_device = device_->GetPhysicalDeviceHandle();
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface_, &details.capabilities);
 
@@ -131,7 +131,7 @@ SwapChainSupportDetails VulkanSwapChain::QuerySwapChainSupport()
     return details;
 }
 
-VkSurfaceFormatKHR VulkanSwapChain::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats)
+VkSurfaceFormatKHR VulkanSwapchain::ChooseSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& available_formats)
 {
     for (const auto& surface_format : available_formats)
     {
@@ -151,7 +151,7 @@ VkSurfaceFormatKHR VulkanSwapChain::ChooseSurfaceFormat(const std::vector<VkSurf
     return available_formats[0];
 }
 
-VkPresentModeKHR VulkanSwapChain::ChoosePresentMode(const std::vector<VkPresentModeKHR>& available_present_modes)
+VkPresentModeKHR VulkanSwapchain::ChoosePresentMode(const std::vector<VkPresentModeKHR>& available_present_modes)
 {
     CHECK(available_present_modes.size() > 0);
 
@@ -174,7 +174,7 @@ VkPresentModeKHR VulkanSwapChain::ChoosePresentMode(const std::vector<VkPresentM
     return available_present_modes[0];
 }
 
-VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height)
+VkExtent2D VulkanSwapchain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height)
 {
     // Swap extent is the resolution of the swap chain images in PIXELS! We have to keep that in mind for high DPI screens, e.g. Retina displays.
     // Usually Vulkan tells us to match the window resolution and sets the extends by itself.
@@ -201,7 +201,7 @@ VkExtent2D VulkanSwapChain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& ca
     }
 }
 
-uint32 VulkanSwapChain::ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities)
+uint32 VulkanSwapchain::ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities)
 {
     // Check the max number of supported images
     // 0 means that there is no maximum set by the device!

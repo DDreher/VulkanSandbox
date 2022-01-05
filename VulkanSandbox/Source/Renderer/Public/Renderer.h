@@ -140,7 +140,7 @@ private:
     // -> We have to create a new pipeline for each combination of pipeline states.
     VkPipeline graphics_pipeline_ = VK_NULL_HANDLE;
 
-    std::vector<VkFramebuffer> swap_chain_framebuffers_;
+    std::vector<VkFramebuffer> swapchain_framebuffers;
 
     VulkanCommandBufferPool* command_buffer_pool_ = nullptr;
     std::vector<VulkanCommandBuffer*> command_buffers_;
