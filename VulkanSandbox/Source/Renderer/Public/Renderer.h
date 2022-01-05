@@ -196,7 +196,7 @@ private:
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
 
-    VulkanContext* RHI_ = nullptr;
+    VulkanContext* VulkanCtx_ = nullptr;
     VulkanViewport* viewport_ = nullptr;
     VulkanRenderPass* render_pass_ = nullptr;
 };
