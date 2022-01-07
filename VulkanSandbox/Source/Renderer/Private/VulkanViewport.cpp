@@ -33,5 +33,6 @@ void VulkanViewport::DestroySwapchain()
 
 void VulkanViewport::Resize(uint32 width, uint32 height)
 {
-
+    width_ = width;
+    height_ = height;
 }

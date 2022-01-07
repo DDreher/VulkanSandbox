@@ -19,24 +19,6 @@ function AddGLM()
     filter {}
 end
 
-function AddGLFW()
-    defines { "MODULE_GLFW" }
-
-	includedirs "$(SolutionDir)/ThirdParty/glfw/include/"
-    libdirs	"$(SolutionDir)/ThirdParty/glfw/lib-vc2019/"
-  
-    postbuildcommands
-    { 
-        "{COPY} \"$(SolutionDir)ThirdParty\\glfw\\lib-vc2019\\glfw3.dll\" \"$(OutDir)\""
-    }
-    links
-    { 
-        "glfw3.lib"
-    }
-
-    filter {}
-end
-
 function AddSTB()  
     defines { "MODULE_STB", "STB_IMAGE_IMPLEMENTATION" }
     includedirs {
@@ -62,4 +44,20 @@ function AddSpdlog()
     } 
         
     filter {}
+end
+
+function AddSDL2(isTarget)  
+    defines { "MODULE_SDL2" }
+	includedirs "$(SolutionDir)/ThirdParty/SDL2/include/"
+    libdirs	"$(SolutionDir)/ThirdParty/SDL2/lib/x64"
+    
+    postbuildcommands
+    { 
+        "{COPY} \"$(SolutionDir)ThirdParty\\SDL2\\lib\\%{cfg.platform}\\SDL2.dll\" \"$(OutDir)\""
+    }
+    links
+    {
+        "SDL2.lib",
+        "SDL2main.lib"
+    }
 end

@@ -31,9 +31,9 @@ public:
 
     void DestroySwapchain();
 
+    void Resize(uint32 width, uint32 height);
 private:
     
-    void Resize(uint32 width, uint32 height);
    
     VulkanDevice* device_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;

@@ -16,7 +16,7 @@ The code is written in C++ and heavily inspired by the [Vulkan Tutorial](https:/
 
 * [TinyObjLoader](https://github.com/syoyo/tinyobjloader)
 * [STB](https://github.com/nothings/stb)
-* [GLFW](https://www.glfw.org/)
+* [SDL](https://www.libsdl.org/)
 * [GLM](https://glm.g-truc.net/)
 * [Vulkan](https://vulkan.lunarg.com/)
 

@@ -1,6 +1,8 @@
 #include "VulkanContext.h"
 
-#include "vulkan/vulkan_core.h"
+#include <vulkan/vulkan_core.h>
+
+#include "SDL_video.h"
 
 #include "VulkanMacros.h"
 
@@ -8,9 +10,10 @@ VulkanContext::VulkanContext()
 {
 }
 
-void VulkanContext::Init()
+void VulkanContext::Init(SDL_Window* window)
 {
     instance_.Init();
+    CreateSurface(window);
     SelectAndInitDevice();
 }
 
@@ -26,6 +29,8 @@ void VulkanContext::Shutdown()
     found_devices_.clear();
 
     device_ = nullptr;
+
+    vkDestroySurfaceKHR(instance_.GetHandle(), surface_, nullptr);
 
     instance_.Shutdown();
 }
@@ -52,11 +57,23 @@ VkImageView VulkanContext::CreateImageView(VkImage image, VkFormat format, VkIma
 
     if (result != VK_SUCCESS)
     {
-        LOG_ERROR("Failed to create image view!");
-        exit(EXIT_FAILURE);
+        LOG_ERROR("VulkanContext::CreateImageView - Failed to create image view!");
+        abort();
     }
 
     return image_view;
+}
+
+void VulkanContext::CreateSurface(SDL_Window* window)
+{
+    assert(window != nullptr);
+
+    SDL_bool success = SDL_Vulkan_CreateSurface(window, instance_.GetHandle(), &surface_);
+    if (success != SDL_TRUE)
+    {
+        LOG("VulkanContext::CreateSurface - Failed to create vulkan surface");
+        abort();
+    }
 }
 
 void VulkanContext::CreateImage(uint32 width, uint32 height, uint32 num_mips, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory)
@@ -148,4 +165,5 @@ void VulkanContext::SelectAndInitDevice()
 
     LOG("Using device: {}", device_->GetDeviceIndex());
     device_->CreateLogicalDevice();
+    device_->InitPresentQueue(surface_);
 }

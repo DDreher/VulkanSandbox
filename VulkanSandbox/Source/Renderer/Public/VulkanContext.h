@@ -1,4 +1,6 @@
 #pragma once
+#include "SDL_vulkan.h"
+#include "SDL_video.h"
 #include <vulkan/vulkan_core.h>
 
 #include "VulkanInstance.h"
@@ -17,7 +19,7 @@ public:
     *    Initializes the RHI using Vulkan as backend.
     *    Creates the Vulkan Instance and selects the physical and logical devices to use.
     */
-    void Init();
+    void Init(SDL_Window* window);
 
     /**
     *    Cleans up the RHI.
@@ -50,6 +52,13 @@ public:
         return device_;
     }
 
+    void CreateSurface(SDL_Window* window);
+
+    const VkSurfaceKHR GetSurface() const
+    {
+        return surface_;
+    }
+
 private:
     void SelectAndInitDevice();
 
@@ -60,4 +69,6 @@ private:
 
     std::vector<VulkanDevice*> found_devices_;
     VulkanDevice* device_ = nullptr;
+
+    VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 };

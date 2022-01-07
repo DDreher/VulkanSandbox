@@ -8,12 +8,12 @@
 
 #include "Vertex.h"
 #include "VulkanBuffer.h"
-#include "VulkanRenderPass.h"
-#include "VulkanContext.h"
-#include "VulkanViewport.h"
 #include "VulkanCommandBuffer.h"
+#include "VulkanContext.h"
+#include "VulkanRenderPass.h"
+#include "VulkanViewport.h"
 
-struct GLFWwindow;
+struct SDL_Window;
 
 struct UniformBufferObject
 {
@@ -34,8 +34,8 @@ struct UniformBufferObject
 class VulkanRenderer
 {
 public:
-    void Init(VulkanContext* RHI, GLFWwindow* window);
-    void OnFrameBufferResize(uint32_t width, uint32_t height);
+    void Init(VulkanContext* vulkan_context, int framebuffer_width, int framebuffer_height);
+    void OnFrameBufferResize(uint32 width, uint32 height);
     void DrawFrame();
     void Cleanup();
 
@@ -47,8 +47,6 @@ private:
 
     static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT message_severity, VkDebugUtilsMessageTypeFlagsEXT message_type,
         const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
-
-    void CreateSurface(GLFWwindow* window);
 
     void CleanUpSwapChain();
 
@@ -108,11 +106,6 @@ private:
 
     static const int MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
 
-    GLFWwindow* window_ = nullptr;
-
-    uint32_t framebuffer_width_ = 0;
-    uint32_t framebuffer_height_ = 0;
-
     const std::string MODEL_PATH = "assets/models/viking_room.obj";
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
 
@@ -128,8 +121,6 @@ private:
     const std::vector<const char*> device_extensions_ = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };    // Availability of a present queue implicitly ensures that swapchains are supported
                                                                                                 // but being explicit is good practice. Also we have to explicitly enable the extension
                                                                                                 // anyway...
-
-    VkSurfaceKHR surface_ = VK_NULL_HANDLE;
 
     // Used by a pipeline to access the descriptor sets.
     // Defines interface between shader stages used by the pipeline and shader resources (but doesn't do the actual binding!)
@@ -192,7 +183,7 @@ private:
     uint32_t current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
 
-    VulkanContext* VulkanCtx_ = nullptr;
+    VulkanContext* vulkan_context_ = nullptr;
     VulkanViewport* viewport_ = nullptr;
     VulkanRenderPass* render_pass_ = nullptr;
 };
