@@ -299,28 +299,13 @@ void VulkanRenderer::CreateGraphicsPipeline()
     input_assembly_info.primitiveRestartEnable = VK_FALSE;  // if true, it's possible to break up lines and triangles in _STRIP topology modes by
                                                             // using a special index of 0xFFFF or 0xFFFFFFFF
 
-    // Viewports and scissors
-    // Viewport describes the region of the framebuffer that output will be rendered to (almost always (0, 0) to (width, height))
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().width);
-    viewport.height = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().height);
-    viewport.minDepth = 0.0f;   // must be in range [0.0, 1.0]
-    viewport.maxDepth = 1.0f;   // must be in range [0.0, 1.0]
-
-    // Any pixels outside the scissor rectangles will be discarded by the rasterizer.
-    VkRect2D scissor{};
-    scissor.offset = { 0, 0 };
-    scissor.extent = viewport_->GetSwapChain()->GetImageExtent();
-
     // Combine both viewport and scissor rect into a viewport state
     VkPipelineViewportStateCreateInfo viewport_state_info{};
     viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewport_state_info.viewportCount = 1;  // Some GPUs support multiple
-    viewport_state_info.pViewports = &viewport;
+    viewport_state_info.pViewports = nullptr;
     viewport_state_info.scissorCount = 1;   // Some GPUs support multiple
-    viewport_state_info.pScissors = &scissor;
+    viewport_state_info.pScissors = nullptr;
 
     // Rasterizer: Turn geometry output from vertex shader and turn it into fragments to be colored by the fragment shader.
     // Also performs depth testing, face culling and the scissor test.
@@ -400,16 +385,15 @@ void VulkanRenderer::CreateGraphicsPipeline()
     // e.g. size of the viewport, line width and blend constants.
     // Specifying this will cause the configuration of these values to be ignored and we will be required to specify the data at drawing time.
     // Can be nullptr if we don't use dynamic states.
+    std::vector<VkDynamicState> dynamic_states = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
 
-    //VkDynamicState dynamic_states[] = {
-    //    VK_DYNAMIC_STATE_VIEWPORT,
-    //    VK_DYNAMIC_STATE_LINE_WIDTH
-    //};
-
-    //VkPipelineDynamicStateCreateInfo dynamic_state_info{};
-    //dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    //dynamic_state_info.dynamicStateCount = 2;
-    //dynamic_state_info.pDynamicStates = dynamic_states;
+    VkPipelineDynamicStateCreateInfo dynamic_state_info = { VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO };
+    dynamic_state_info.dynamicStateCount = static_cast<uint32>(dynamic_states.size());
+    dynamic_state_info.pDynamicStates = dynamic_states.data();
+    dynamic_state_info.flags = 0;
 
     // Pipeline layout - Describes the usage of uniforms.
     // Uniform values are globals similar to dynamic state variables that can be changed at drawing time to alter the behavior of your shaders 
@@ -423,11 +407,7 @@ void VulkanRenderer::CreateGraphicsPipeline()
     pipeline_layout_info.pSetLayouts = &descriptor_set_layout_; // Optional
     pipeline_layout_info.pushConstantRangeCount = 0; // Optional, push constants are another way of passing dynamic values to shaders 
     pipeline_layout_info.pPushConstantRanges = nullptr; // Optional
-
-    if (vkCreatePipelineLayout(vulkan_context_->GetDevice()->GetLogicalDeviceHandle(), &pipeline_layout_info, nullptr, &pipeline_layout_) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Failed to create pipeline layout!");
-    }
+    CHECK((vkCreatePipelineLayout(vulkan_context_->GetDevice()->GetLogicalDeviceHandle(), &pipeline_layout_info, nullptr, &pipeline_layout_) == VK_SUCCESS));
 
     VkGraphicsPipelineCreateInfo pipeline_create_info{};
     pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -440,7 +420,6 @@ void VulkanRenderer::CreateGraphicsPipeline()
     pipeline_create_info.pMultisampleState = &multisampling_info;
     pipeline_create_info.pDepthStencilState = &depth_stencil_info; // Have to add this if we use a depth attachment
     pipeline_create_info.pColorBlendState = &color_blending_info;
-    pipeline_create_info.pDynamicState = nullptr; // Optional
     pipeline_create_info.layout = pipeline_layout_;
     pipeline_create_info.renderPass = render_pass_->GetHandle();
     pipeline_create_info.subpass = 0;   // index of the sub pass where this graphics pipeline will be used
@@ -448,12 +427,16 @@ void VulkanRenderer::CreateGraphicsPipeline()
                                                                 // Deriving is less expensive to set up when pipelines have lots of functionality in common and
                                                                 // switching between pipelines from the same parent can be done quicker.
     pipeline_create_info.basePipelineIndex = -1; // Optional
+    pipeline_create_info.pDynamicState = &dynamic_state_info; // Optional
 
+    // ----------------------
     // Time to create the graphics pipeline!
     uint32_t create_info_count = 1; // We could create multiple render pipelines at once.
-    VkPipelineCache pipeline_cache = VK_NULL_HANDLE;    // can be used to store and reuse data relevant to pipeline creation across multiple calls to vkCreateGraphicsPipelines
+    VkPipelineCache pipeline_cache = VK_NULL_HANDLE;    // can be used to store and reuse data relevant to pipeline creation
+                                                        // across multiple calls to vkCreateGraphicsPipelines
                                                         // and even across program executions if the cache is stored to a file. 
-    if (vkCreateGraphicsPipelines(vulkan_context_->GetDevice()->GetLogicalDeviceHandle(), pipeline_cache, create_info_count, &pipeline_create_info, nullptr, &graphics_pipeline_) != VK_SUCCESS)
+    if (vkCreateGraphicsPipelines(vulkan_context_->GetDevice()->GetLogicalDeviceHandle(), pipeline_cache, create_info_count,
+        &pipeline_create_info, nullptr, &graphics_pipeline_) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to create graphics pipeline!");
     }
@@ -582,6 +565,21 @@ void VulkanRenderer::FillCommandBuffers()
         render_pass_info.pClearValues = clear_values.data();
 
         vkCmdBeginRenderPass(cmd_buffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
+
+        // Set up dynamic states
+        VkViewport viewport{};
+        viewport.x = 0.0f;
+        viewport.y = 0.0f;
+        viewport.width = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().width);
+        viewport.height = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().height);
+        viewport.minDepth = 0.0f;   // must be in range [0.0, 1.0]
+        viewport.maxDepth = 1.0f;   // must be in range [0.0, 1.0]
+        vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
+
+        VkRect2D scissor{};
+        scissor.offset = { 0, 0 };
+        scissor.extent = viewport_->GetSwapChain()->GetImageExtent();
+        vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
         vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
 
