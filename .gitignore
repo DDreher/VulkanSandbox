@@ -58,6 +58,7 @@
 
 # Script files
 !*.bat
+!*.ps1
 !*.sh
 !*.pl
 !*.py
@@ -132,3 +133,4 @@ Saved/
 
 # Exception for necessary binaries
 !premake5.exe
+!ThirdParty/**/*.lib
