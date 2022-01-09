@@ -13,7 +13,7 @@ struct SwapchainSupportDetails
 class VulkanSwapchain
 {
 public:
-    VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height);
+    VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height, VkSwapchainKHR old_swapchain = VK_NULL_HANDLE);
 
     void Destroy();
     void Recreate();
@@ -62,6 +62,8 @@ private:
     VkPresentModeKHR ChoosePresentMode(const std::vector<VkPresentModeKHR>& available_present_modes);
     VkExtent2D ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height);
     uint32 ChooseNumberOfImages(const VkSurfaceCapabilitiesKHR& capabilities);
+
+    void DestroyImageViews();
 
     VulkanDevice* device_ = nullptr;
     VkSurfaceKHR surface_ = VK_NULL_HANDLE;

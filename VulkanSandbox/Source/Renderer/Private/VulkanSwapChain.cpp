@@ -4,7 +4,7 @@
 #include "VulkanMacros.h"
 #include "VulkanQueue.h"
 
-VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height)
+VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uint32 width, uint32 height, VkSwapchainKHR old_swapchain)
     : device_(device),
     surface_(surface)
 {
@@ -62,15 +62,19 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uin
         create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;   // An image is owned by one queue family and ownership must be explicitly transferred 
                                                                     // before using it in another queue family => Best performance, more work.
     }
-
-    // With Vulkan it's possible that the swap chain becomes invalid or unoptimized while the application is running (e.g. due to window resize).
-    // => We may have to recreate swap chain from scratch. If so we have to provide a handle to the old swap chain here.
-    create_info.oldSwapchain = VK_NULL_HANDLE;  // For now assume that we will only ever create one swap chain.
+    create_info.oldSwapchain = old_swapchain;
 
     LOG("Creating Vulkan swapchain (present mode: {}, format: {}, color space: {})",
         static_cast<uint32>(present_mode_), static_cast<uint32>(surface_format_.format), static_cast<uint32>(surface_format_.colorSpace));
 
     VERIFY_VK_RESULT(vkCreateSwapchainKHR(device_->GetLogicalDeviceHandle(), &create_info, nullptr, &swapchain_));
+
+    if(old_swapchain != VK_NULL_HANDLE)
+    {
+        LOG("Cleaning up old swapchain");
+        vkDestroySwapchainKHR(device_->GetLogicalDeviceHandle(), old_swapchain, nullptr);
+        DestroyImageViews();
+    }
 
     // Retrieve image handles of swap chain (could be less than we requested)
     uint32 num_swapchain_images;
@@ -89,14 +93,20 @@ VulkanSwapchain::VulkanSwapchain(VulkanDevice* device, VkSurfaceKHR surface, uin
 
 void VulkanSwapchain::Destroy()
 {
-    // Destroy image views
+    device_->WaitUntilIdle();
+
+    DestroyImageViews();
+    // Note: Images themselves are destroyed together with the swapchain
+
+    vkDestroySwapchainKHR(device_->GetLogicalDeviceHandle(), swapchain_, nullptr);
+}
+
+void VulkanSwapchain::DestroyImageViews()
+{
     for (auto image_view : swapchain_image_views_)
     {
         vkDestroyImageView(device_->GetLogicalDeviceHandle(), image_view, nullptr);
     }
-
-    // Images themselves are destroyed together with the swapchain
-    vkDestroySwapchainKHR(device_->GetLogicalDeviceHandle(), swapchain_, nullptr);
 }
 
 void VulkanSwapchain::Recreate()
