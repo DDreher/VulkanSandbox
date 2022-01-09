@@ -10,11 +10,18 @@ VulkanContext::VulkanContext()
 {
 }
 
+VulkanContext& VulkanContext::Get()
+{
+    static VulkanContext instance;
+    return instance;
+}
+
 void VulkanContext::Init(SDL_Window* window)
 {
     instance_.Init();
     CreateSurface(window);
     SelectAndInitDevice();
+    is_initialized = true;
 }
 
 void VulkanContext::Shutdown()

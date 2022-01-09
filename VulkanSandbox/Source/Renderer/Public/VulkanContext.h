@@ -3,8 +3,9 @@
 #include "SDL_video.h"
 #include <vulkan/vulkan_core.h>
 
-#include "VulkanInstance.h"
+#include "VulkanCommandBuffer.h"
 #include "VulkanDevice.h"
+#include "VulkanInstance.h"
 
 /**
  * Owner of all application specific Vulkan resources
@@ -14,6 +15,8 @@ class VulkanContext
 public:
     VulkanContext();
     ~VulkanContext() {};
+
+    static VulkanContext& Get();
 
     /**
     *    Initializes the RHI using Vulkan as backend.
@@ -59,7 +62,14 @@ public:
         return surface_;
     }
 
+    const bool IsInitialized() const
+    {
+        return is_initialized;
+    }
+
 private:
+    bool is_initialized = false;
+
     void SelectAndInitDevice();
 
     VulkanInstance instance_;
