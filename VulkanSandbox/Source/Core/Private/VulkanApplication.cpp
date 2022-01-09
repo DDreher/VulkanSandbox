@@ -20,8 +20,8 @@ void VulkanApplication::Init()
     int32 height;
     SDL_GetWindowSize(window_, &width, &height);
 
-    vulkan_context_.Init(window_);
-    renderer_.Init(&vulkan_context_, static_cast<uint32>(width), static_cast<uint32>(height));
+    VulkanContext::Get().Init(window_);
+    renderer_.Init(static_cast<uint32>(width), static_cast<uint32>(height));
 }
 
 void VulkanApplication::MainLoop()
@@ -70,7 +70,7 @@ void VulkanApplication::Cleanup()
 {
     LOG("VulkanApplication::Cleanup - Tearing down application...");
     renderer_.Cleanup();
-    vulkan_context_.Shutdown();
+    VulkanContext::Get().Shutdown();
     DestroyWindow();
 
     SDL_Quit();

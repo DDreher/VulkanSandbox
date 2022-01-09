@@ -1,10 +1,13 @@
 #include "VulkanRenderPass.h"
 
-VulkanRenderPass::VulkanRenderPass(VulkanContext* RHI, VulkanSwapchain* swapchain)
-    : RHI_(RHI)
+#include "VulkanContext.h"
+
+VulkanRenderPass::VulkanRenderPass(VulkanSwapchain* swapchain)
 {
-    CHECK(RHI != nullptr);
+    CHECK(VulkanContext::Get().IsInitialized());
     CHECK(swapchain != nullptr);
+
+    VulkanContext& vulkan_context = VulkanContext::Get();
 
     // TODO: We have to be able to define all of this from the outside...
 
@@ -51,7 +54,7 @@ VulkanRenderPass::VulkanRenderPass(VulkanContext* RHI, VulkanSwapchain* swapchai
     color_attachment_resolve.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentDescription depth_attachment{};
-    depth_attachment.format = RHI->GetDevice()->FindDepthFormat();
+    depth_attachment.format = vulkan_context.GetDevice()->FindDepthFormat();
     depth_attachment.samples = num_msaa_samples;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;    // depth data will not be used after drawing has finished (may allow hardware optimizations)
@@ -131,7 +134,7 @@ VulkanRenderPass::VulkanRenderPass(VulkanContext* RHI, VulkanSwapchain* swapchai
     render_pass_info.dependencyCount = 1;
     render_pass_info.pDependencies = &dependency;
 
-    VkResult result = vkCreateRenderPass(RHI_->GetDevice()->GetLogicalDeviceHandle(), &render_pass_info, nullptr, &render_pass_);
+    VkResult result = vkCreateRenderPass(vulkan_context.GetDevice()->GetLogicalDeviceHandle(), &render_pass_info, nullptr, &render_pass_);
     if (result != VK_SUCCESS)
     {
         LOG_ERROR("Failed to create VulkanRenderPass");
@@ -141,8 +144,7 @@ VulkanRenderPass::VulkanRenderPass(VulkanContext* RHI, VulkanSwapchain* swapchai
 
 VulkanRenderPass::~VulkanRenderPass()
 {
-    // TODO: Properly delete render pass
-    vkDestroyRenderPass(RHI_->GetDevice()->GetLogicalDeviceHandle(), render_pass_, nullptr);
+    vkDestroyRenderPass(VulkanContext::Get().GetDevice()->GetLogicalDeviceHandle(), render_pass_, nullptr);
     render_pass_ = VK_NULL_HANDLE;
 }
 
