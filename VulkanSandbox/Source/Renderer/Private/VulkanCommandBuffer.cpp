@@ -21,12 +21,20 @@ VulkanCommandBufferPool::VulkanCommandBufferPool(VulkanDevice* device, VulkanQue
 
 VulkanCommandBufferPool::~VulkanCommandBufferPool()
 {
-    CHECK(handle_ != VK_NULL_HANDLE);
-    CHECK(device_ != nullptr);
-    vkDestroyCommandPool(device_->GetLogicalDeviceHandle(), handle_, nullptr);
-    // ^^^ Also destroys any command buffers we retrieved from the pool
+    if(handle_ != VK_NULL_HANDLE)
+    {
+        CHECK(device_ != nullptr);
+        vkDestroyCommandPool(device_->GetLogicalDeviceHandle(), handle_, nullptr);
+        // ^^^ Also destroys any command buffers we retrieved from the pool
+    }
 }
 
+void VulkanCommandBufferPool::DestroyCommandBuffer(const VkCommandBuffer* command_buffer)
+{
+    CHECK(command_buffer != nullptr);
+    CHECK(device_ != nullptr);
+    vkFreeCommandBuffers(device_->GetLogicalDeviceHandle(), handle_, 1 /*num buffers*/, command_buffer);
+}
 
 VulkanCommandBuffer::VulkanCommandBuffer(VulkanDevice* device, VulkanCommandBufferPool* command_buffer_pool, VkCommandBufferLevel level)
     : device_(device),
@@ -48,22 +56,55 @@ VulkanCommandBuffer::VulkanCommandBuffer(VulkanDevice* device, VulkanCommandBuff
 VulkanCommandBuffer::~VulkanCommandBuffer()
 {
     CHECK(handle_ != VK_NULL_HANDLE);
-    CHECK(device_ != nullptr);
     CHECK(command_buffer_pool_ != nullptr);
-
-    vkFreeCommandBuffers(device_->GetLogicalDeviceHandle(), command_buffer_pool_->GetHandle(), 1 /*num buffers*/, &handle_);
+    command_buffer_pool_->DestroyCommandBuffer(&handle_);
 }
 
-void VulkanCommandBuffer::Begin(const VkCommandBufferUsageFlags& flags)
+VkResult VulkanCommandBuffer::Begin(const VkCommandBufferUsageFlags flags)
 {
+    CHECK(handle_ != VK_NULL_HANDLE);
+
+    if(is_recording_)
+    {
+        CHECK_MSG(false, "VulkanCommandBuffer::Begin - End should be called before Begin is called again!");
+        return VK_NOT_READY;
+    }
+
     VkCommandBufferBeginInfo begin_info = { VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO };
     begin_info.flags = flags;
-    VERIFY_VK_RESULT(vkBeginCommandBuffer(handle_, &begin_info));
-    is_record_in_progress = true;
+
+    VkResult result = vkBeginCommandBuffer(handle_, &begin_info);
+    if(result != VK_SUCCESS)
+    {
+        VERIFY_VK_RESULT(result);
+        return result;
+    }
+
+    is_recording_ = true;
+    return VK_SUCCESS;
 }
 
-void VulkanCommandBuffer::End()
+VkResult VulkanCommandBuffer::End()
 {
-    vkEndCommandBuffer(GetHandle());
-    is_record_in_progress = false;
+    if(is_recording_ == false)
+    {
+        // Can't end recording if it was never started
+        CHECK_MSG(false, "VulkanCommandBuffer::End - End called before Begin!");
+        return VK_NOT_READY;
+    }
+
+    CHECK(handle_ != VK_NULL_HANDLE);
+    VkResult result = vkEndCommandBuffer(handle_);
+    VERIFY_VK_RESULT(result);
+    
+    is_recording_ = false;
+    return result;
+}
+
+VkResult VulkanCommandBuffer::Reset()
+{
+    CHECK(handle_ != VK_NULL_HANDLE);
+    return vkResetCommandBuffer(handle_, VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT);
+    // ^ VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT: most or all memory resources currently owned by the command buffer
+    // >should< be returned to the parent command pool
 }

@@ -5,6 +5,12 @@ class VulkanQueue;
 class VulkanCommandBufferPool;
 class VulkanDevice;
 
+/*
+ * Wrapper around vkCommandBuffer.
+ *
+ * Drawing operations and memory transfers are stored in command buffers. These are retrieved from command pools.
+ * We can fill these buffers in multiple threads and then execute them all at once on the render thread.
+ */
 class VulkanCommandBuffer
 {
 public:
@@ -12,17 +18,18 @@ public:
         VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY);
     ~VulkanCommandBuffer();
 
-    void Begin(const VkCommandBufferUsageFlags& flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-    void End();
+    VkResult Begin(const VkCommandBufferUsageFlags flags);
+    VkResult End();
+    VkResult Reset();
 
     inline const VkCommandBuffer& GetHandle() const
     {
         return handle_;
     }
 
-    bool IsInProgress() const
+    bool IsRecording() const
     {
-        return is_record_in_progress;
+        return is_recording_;
     }
 
 private:
@@ -30,15 +37,13 @@ private:
     VulkanCommandBufferPool* command_buffer_pool_ = nullptr;
     VkCommandBuffer handle_ = VK_NULL_HANDLE;
 
-    bool is_record_in_progress = false;
+    bool is_recording_ = false;
+    bool is_submitted_ = false;
 };
 
 /*
  * Wrapper around VkCommandPool.
- * Used to allocate command buffers for a given queue type.
- *
- * Drawing operations and memory transfers are stored in command buffers. These are retrieved from command pools.
- * We can fill these buffers in multiple threads and then execute them all at once on the render thread.
+ * Used to allocate command buffers for a given queue.
  */
 class VulkanCommandBufferPool
 {
@@ -56,9 +61,8 @@ public:
         return VulkanCommandBuffer(device_, this, level);
     }
 
+    void DestroyCommandBuffer(const VkCommandBuffer* command_buffer);
 private:
     VulkanDevice* device_ = nullptr;
     VkCommandPool handle_ = VK_NULL_HANDLE;
-
-
 };

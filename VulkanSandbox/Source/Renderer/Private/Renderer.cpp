@@ -708,7 +708,7 @@ void VulkanRenderer::CopyBuffer(VkBuffer src, VkBuffer dst, VkDeviceSize size)
 
     VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
 
-    command_buffer.Begin();
+    command_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     VkBufferCopy copy_region{};
     copy_region.srcOffset = 0; // Optional
     copy_region.dstOffset = 0; // Optional
@@ -799,7 +799,7 @@ void VulkanRenderer::TransitionImageLayout(VkImage image, VkFormat format, VkIma
         throw std::invalid_argument("Unsupported layout transition!");
     }
 
-    command_buffer.Begin();
+    command_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     // Submit the barrier. (All barriers use the same function!)
     // Allowed stage values are specified here:
@@ -843,7 +843,7 @@ void VulkanRenderer::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t 
         1
     };
 
-    command_buffer.Begin();
+    command_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
     vkCmdCopyBufferToImage(
         command_buffer.GetHandle(),
         buffer,
@@ -929,7 +929,7 @@ void VulkanRenderer::GenerateMipmaps(VkImage image, VkFormat image_format, int32
     }
 
     VulkanCommandBuffer command_buffer = command_buffer_pool_->CreateCommandBuffer();
-    command_buffer.Begin();
+    command_buffer.Begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
     VkImageMemoryBarrier barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER };
     barrier.image = image;

@@ -18,7 +18,7 @@ VulkanQueue::~VulkanQueue()
 
 void VulkanQueue::Submit(const VulkanCommandBuffer& command_buffer) const
 {
-    CHECK(command_buffer.IsInProgress() == false);
+    CHECK(command_buffer.IsRecording() == false);
 
     VkSubmitInfo submit_info = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
     submit_info.commandBufferCount = 1;
