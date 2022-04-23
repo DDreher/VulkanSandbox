@@ -3,7 +3,6 @@
 #include <chrono>
 
 #include <stb/stb_image.h>
-#include <tiny_obj_loader.h>
 
 #include "FileIO.h"
 #include "VulkanCommandBuffer.h"
@@ -30,6 +29,7 @@ void VulkanRenderer::Init(int framebuffer_width, int framebuffer_height)
     viewport_ = new VulkanViewport(device, vulkan_context.GetSurface(), framebuffer_width, framebuffer_height);
 
     camera_ = Camera({ 2.0f, 2.0f, 2.0f }, viewport_->GetWidth() / static_cast<float>(viewport_->GetHeight()), glm::radians(45.0f), 0.1f, 1000.0f);
+    mesh_ = Mesh({ 0.0f, 0.0f, 0.0f }, 1.0f, "assets/models/viking_room.obj");
 
     // Tell Vulkan about the framebuffer attachments that will be used while rendering
     // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
@@ -59,9 +59,6 @@ void VulkanRenderer::Init(int framebuffer_width, int framebuffer_height)
     CreateTextureImage();
     CreateTextureImageView();
     CreateTextureSampler();
-
-    // Populate vertices and indices
-    LoadModel();
 
     // Create and allocate buffers for our model we want to render
     // We can further optimize this by storing both vertex and index buffer in a single vkBuffer to make it more cache friendly
@@ -642,7 +639,7 @@ void VulkanRenderer::FillCommandBuffers()
             pipeline_layout_, 0, 1, &descriptor_sets_[i], 0, nullptr);
 
         //vkCmdDraw(command_buffers_[i], static_cast<uint32_t>(vertices.size()), 1, 0, 0);  // <-- Draws without index buffer
-        vkCmdDrawIndexed(cmd_buffer, static_cast<uint32_t>(indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
+        vkCmdDrawIndexed(cmd_buffer, static_cast<uint32_t>(mesh_.GetMeshData().indices_.size()), 1, 0, 0, 0); // <- Draws with index buffer
 
         vkCmdEndRenderPass(cmd_buffer);
 
@@ -1166,72 +1163,6 @@ void VulkanRenderer::CreateTextureSampler()
     }
 }
 
-void VulkanRenderer::LoadModel()
-{
-    // An OBJ file consists of positions, normals, texture coordinates and faces. Faces consist of an arbitrary amount of vertices, 
-    // where each vertex refers to a position, normal and/or texture coordinate by index. 
-    // This makes it possible to not just reuse entire vertices, but also individual attributes.
-
-    tinyobj::attrib_t attrib;
-    // ^^^ Holds all positions, normals and tex coords
-
-    std::vector<tinyobj::shape_t> shapes;
-    // ^^^ Contains all of the separate objects and their faces
-    // Each face consists of an array of vertices, and each vertex contains the indices of the position, normal and texture coordinate attributes
-
-    std::vector<tinyobj::material_t> materials;
-    // ^^^ OBJ models can also define a material and texture per face
-
-    std::string warn, err;
-
-    // Load the model with tinyobj
-    // LoadObj automatically triangulates the vertices by default
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str()))
-    {
-        throw std::runtime_error(warn + err);
-    }
-
-    // Fill vertices / indices array from loaded data
-    std::unordered_map<Vertex, uint32_t> unique_vertices{};
-
-    for (const auto& shape : shapes)
-    {
-        for (const auto& index : shape.mesh.indices)
-        {
-            Vertex vertex{};
-
-            // Look up the actual vertex attributes in the attrib arrays
-            // We can be sure that every face has 3 vertices.
-            // This is a flat array though, so we have to use a stride of 3
-            vertex.pos_ =
-            {
-                attrib.vertices[3 * index.vertex_index + 0],
-                attrib.vertices[3 * index.vertex_index + 1],
-                attrib.vertices[3 * index.vertex_index + 2]
-            };
-
-            // Similarly, every vertex has 2 texcoord values
-            vertex.tex_coords_ =
-            {
-                attrib.texcoords[2 * index.texcoord_index + 0],
-                1.0f - attrib.texcoords[2 * index.texcoord_index + 1]   // OBJ format assumes 0 is at bottom, but it's actually at the top in our case
-            };
-
-            vertex.color_ = { 1.0f, 1.0f, 1.0f };
-
-            // Only keep unique vertices so we can make use of the index buffer
-            if (unique_vertices.count(vertex) == 0)
-            {
-                uint32_t vertex_index = static_cast<uint32_t>(vertices_.size());
-                unique_vertices[vertex] = vertex_index;
-                vertices_.push_back(vertex);
-            }
-
-            indices_.push_back(unique_vertices[vertex]);
-        }
-    }
-}
-
 void VulkanRenderer::CreateVertexBuffer()
 {
     VulkanContext& vulkan_context = VulkanContext::Get();
@@ -1239,7 +1170,7 @@ void VulkanRenderer::CreateVertexBuffer()
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    VkDeviceSize buffer_size = sizeof(vertices_[0]) * vertices_.size();
+    VkDeviceSize buffer_size = sizeof(mesh_.GetMeshData().vertices_[0]) * mesh_.GetMeshData().vertices_.size();
 
     // Use host-visible buffer as temporary staging buffer, which is later copied to device local memory.
     // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
@@ -1258,7 +1189,7 @@ void VulkanRenderer::CreateVertexBuffer()
 
     // Map allocated memory into CPU address space, copy over vertices to staging buffer
 
-    memcpy(staging_buffer.Map(buffer_size), vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+    memcpy(staging_buffer.Map(buffer_size), mesh_.GetMeshData().vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
     staging_buffer.Unmap();
 
     vertex_buffer_ = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
@@ -1282,11 +1213,11 @@ void VulkanRenderer::CreateIndexBuffer()
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    VkDeviceSize buffer_size = sizeof(indices_[0]) * indices_.size();
+    VkDeviceSize buffer_size = sizeof(mesh_.GetMeshData().indices_[0]) * mesh_.GetMeshData().indices_.size();
 
     VulkanBuffer staging_buffer = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    memcpy(staging_buffer.Map(buffer_size), indices_.data(), (size_t)buffer_size);
+    memcpy(staging_buffer.Map(buffer_size), mesh_.GetMeshData().indices_.data(), (size_t)buffer_size);
     staging_buffer.Unmap();
 
     index_buffer_ = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
@@ -1423,12 +1354,14 @@ void VulkanRenderer::UpdateUniformData(uint32_t current_swap_chain_img_idx)
 
     UniformBufferObject ubo{};
 
-    // Rotate around the z-axis
-    ubo.model = glm::rotate(
-        glm::mat4(1.0f),    // Existing transform. In this case identity.
-        time * glm::radians(90.0f), // Rotation angle -> In this case 90 degrees per second
-        glm::vec3(0.0f, 0.0f, 1.0f) // Rotation axis
-    );
+    // Rotate mesh around z axis
+    mesh_.SetTransform(glm::rotate(
+        Mat4(1.0f),
+        time * glm::radians(-90.0f),
+        Vec3(0.0f, 0.0f, 1.0f)
+    ));
+
+    ubo.model = mesh_.GetTransform();
 
     // Look at the model from above at 45° angle
     camera_.SetPosition({ 2.0f, 2.0f, 2.0f });

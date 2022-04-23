@@ -84,9 +84,9 @@ project (ProjectName)
 	AddVulkan()
 	AddGLM()
 	AddSTB()
-	AddTinyObjLoader()
 	AddSpdlog()
 	AddSDL2()
+	AddAssimp()
 
 	filter "files:**/ThirdParty/**.*"
 		flags "NoPCH"

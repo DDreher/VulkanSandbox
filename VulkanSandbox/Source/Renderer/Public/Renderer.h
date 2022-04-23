@@ -1,11 +1,13 @@
 #pragma once
 
+#include "Camera.h"
+#include "Mesh.h"
 #include "Vertex.h"
 #include "VulkanBuffer.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanRenderPass.h"
 #include "VulkanViewport.h"
-#include "Camera.h"
+
 
 struct SDL_Window;
 
@@ -82,8 +84,6 @@ private:
 
     void CreateTextureSampler();
 
-    void LoadModel();
-
     void CreateVertexBuffer();
 
     void CreateIndexBuffer();
@@ -117,6 +117,7 @@ private:
                                                                                                 // anyway...
 
     Camera camera_;
+    Mesh mesh_;
 
     // Used by a pipeline to access the descriptor sets.
     // Defines interface between shader stages used by the pipeline and shader resources (but doesn't do the actual binding!)
@@ -139,9 +140,6 @@ private:
     // Fences - Host-Device-Synchronization. Use to check completion of queued operations, e.g. command buffer executions.
     std::vector<VkFence> inflight_frame_fences_;
     std::vector<VkFence> inflight_images_;
-
-    std::vector<Vertex> vertices_;
-    std::vector<uint32> indices_;
 
     VulkanBuffer vertex_buffer_;
     VulkanBuffer index_buffer_;

@@ -1,23 +1,18 @@
 #pragma once
 
-#define GLM_FORCE_RADIANS   // Ensure that matrix functions use radians as units
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE // GLM perspective projection matrix will use depth range of -1.0 to 1.0 by default. We need range of 0.0 to 1.0 for Vulkan.
-#define GLM_ENABLE_EXPERIMENTAL // Needed so we can use the hash functions of GLM types
-#include <glm/glm.hpp>
-#include <glm/gtx/hash.hpp>
 #include <vulkan/vulkan_core.h>
 
 struct Vertex
 {
-    glm::vec3 pos_;
-    glm::vec3 color_;
-    glm::vec2 tex_coords_;
+    Vec3 pos_;
+    Vec3 color_;
+    Vec2 tex_coords_;
 
     static VkVertexInputBindingDescription GetBindingDescription()
     {
         // Describes how to pass data to the vertex shader.
-        // Specifies number of bytes between data entries and the input rate, i.e. whether to move to next data entry
-        // after each vertex or after each instance
+        // Specifies number of bytes between data entries and the input rate,
+        // i.e. whether to move to next data entry after each vertex or after each instance
         VkVertexInputBindingDescription binding_description{};
         binding_description.binding = 0;    // Specifies index of the binding in an array of bindings. 
                                             // Our data is in one array, so we have only one binding.
@@ -39,18 +34,15 @@ struct Vertex
         attribute_descriptions[0].binding = 0;  // Which binding does the per-vertex data come from?
         attribute_descriptions[0].location = 0; // References the location of the attribute in the vertex shader
         attribute_descriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // Data type of the attribute. Implicitely defines the byte size of the attribute data
-                                                                    // -> For some reason we have to use the color format enums here... Weird af
                                                                     // float: VK_FORMAT_R32_SFLOAT      
                                                                     // vec2 : VK_FORMAT_R32G32_SFLOAT
                                                                     // vec3 : VK_FORMAT_R32G32B32_SFLOAT
                                                                     // vec4 : VK_FORMAT_R32G32B32A32_SFLOAT
-                                                                    // -> In this case it's the position, which has three 32bit float components (i.e. r,g,b channel)
-                                                                    // If we specify less components than are actually required, then the BGA channels default to (0.0f, 0.0f, 1.0f).
                                                                     // -> SFLOAT means signed float. There's also UINT, SINT. Should match the type of the shader input
+                                                                    // If we specify less components than actually required, the BGA channels default to (0.0f, 0.0f, 1.0f).
 
         attribute_descriptions[0].offset = offsetof(Vertex, pos_);  // Specifies the number of bytes since the start of the per-vertex data to read from
-                                                                    // Binding is loading one vertex at a time and pos is at an offset of 0 bytes from the beginning of the struct.
-                                                                    // -> We can easily calculate this with the offsetof macro though!
+                                                                    // Binding loads one vertex at a time. pos is at an offset of 0 bytes from the beginning of the struct.
 
         // Color attribute
         attribute_descriptions[1].binding = 0;
@@ -78,14 +70,15 @@ struct Vertex
 // We use a hash map to get rid of duplicated vertices in loaded models.
 namespace std
 {
-    template<> struct hash<Vertex>
+    template<>
+    struct hash<Vertex>
     {
-        size_t operator()(Vertex const& vertex) const
+        size_t operator()(const Vertex& vertex) const
         {
             // Create hash according to http://en.cppreference.com/w/cpp/utility/hash
-            return ((hash<glm::vec3>()(vertex.pos_) ^
-                (hash<glm::vec3>()(vertex.color_) << 1)) >> 1) ^
-                (hash<glm::vec2>()(vertex.tex_coords_) << 1);
+            return ((hash<Vec3>()(vertex.pos_) ^
+                (hash<Vec3>()(vertex.color_) << 1)) >> 1) ^
+                (hash<Vec2>()(vertex.tex_coords_) << 1);
         }
     };
 }

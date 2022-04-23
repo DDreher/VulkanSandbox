@@ -22,6 +22,8 @@
 #include <utility>
 #include <vector>
 
+// Type aliases
+
 //~ Unsigned base types
 using uint8 = unsigned char;
 using uint16 = unsigned short int;
@@ -52,3 +54,22 @@ constexpr SharedPtr<T> MakeShared(Args&& ... args)
 {
     return std::make_shared<T>(std::forward<Args>(args)...);
 }
+
+template<typename T>
+using WeakPtr = std::weak_ptr<T>;
+
+//~ Data Containers
+template<typename T>
+using Array = std::vector<T>;
+
+template<typename T, typename T2>
+using Map = std::unordered_map<T, T2>;
+
+template<typename T>
+using Deque = std::deque<T>;
+
+template<typename T>
+using Queue = std::queue<T>;
+
+//~ Misc
+using String = std::string;
