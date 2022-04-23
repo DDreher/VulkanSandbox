@@ -1,16 +1,11 @@
 #pragma once
 
-#define GLM_FORCE_RADIANS   // Ensure that matrix functions use radians as units
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE // GLM perspective projection matrix will use depth range of -1.0 to 1.0 by default. We need range of 0.0 to 1.0 for Vulkan.
-#define GLM_ENABLE_EXPERIMENTAL // Needed so we can use the hash functions of GLM types
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp> // matrix functions like glm::lookAt etc.
-
 #include "Vertex.h"
 #include "VulkanBuffer.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanRenderPass.h"
 #include "VulkanViewport.h"
+#include "Camera.h"
 
 struct SDL_Window;
 
@@ -25,9 +20,9 @@ struct UniformBufferObject
     // See: https://www.khronos.org/registry/vulkan/specs/1.1-extensions/html/chap14.html#interfaces-resources-layout
 
     // Best practice: Always be explicit about alignment!
-    alignas(16) glm::mat4 model;
-    alignas(16) glm::mat4 view;
-    alignas(16) glm::mat4 proj;
+    alignas(16) Mat4 model;
+    alignas(16) Mat4 view;
+    alignas(16) Mat4 proj;
 };
 
 class VulkanRenderer
@@ -103,7 +98,7 @@ private:
 
     void CreateSyncObjects();
 
-    static const int MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
+    static const int32 MAX_FRAMES_IN_FLIGHT = 2;  // How many frames should be processed concurrently
 
     const std::string MODEL_PATH = "assets/models/viking_room.obj";
     const std::string TEXTURE_PATH = "assets/textures/viking_room.png";
@@ -120,6 +115,8 @@ private:
     const std::vector<const char*> device_extensions_ = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };    // Availability of a present queue implicitly ensures that swapchains are supported
                                                                                                 // but being explicit is good practice. Also we have to explicitly enable the extension
                                                                                                 // anyway...
+
+    Camera camera_;
 
     // Used by a pipeline to access the descriptor sets.
     // Defines interface between shader stages used by the pipeline and shader resources (but doesn't do the actual binding!)
@@ -144,7 +141,7 @@ private:
     std::vector<VkFence> inflight_images_;
 
     std::vector<Vertex> vertices_;
-    std::vector<uint32_t> indices_;
+    std::vector<uint32> indices_;
 
     VulkanBuffer vertex_buffer_;
     VulkanBuffer index_buffer_;
@@ -162,7 +159,7 @@ private:
     // -> Glue between shaders and the actual resources.
     std::vector<VkDescriptorSet> descriptor_sets_;
 
-    uint32_t num_mips_;
+    uint32 num_mips_;
     VkImage texture_image_;
     VkDeviceMemory texture_image_memory_;
     VkImageView texture_image_view_;
@@ -179,7 +176,7 @@ private:
     VkDeviceMemory color_image_memory_;
     VkImageView color_image_view_;
 
-    uint32_t current_frame_ = 0;
+    uint32 current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
 
     VulkanViewport* viewport_ = nullptr;

@@ -29,6 +29,8 @@ void VulkanRenderer::Init(int framebuffer_width, int framebuffer_height)
 
     viewport_ = new VulkanViewport(device, vulkan_context.GetSurface(), framebuffer_width, framebuffer_height);
 
+    camera_ = Camera({ 2.0f, 2.0f, 2.0f }, viewport_->GetWidth() / static_cast<float>(viewport_->GetHeight()), glm::radians(45.0f), 0.1f, 1000.0f);
+
     // Tell Vulkan about the framebuffer attachments that will be used while rendering
     // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
     // how their contents should be handled throughout the rendering, operations,...
@@ -1429,18 +1431,12 @@ void VulkanRenderer::UpdateUniformData(uint32_t current_swap_chain_img_idx)
     );
 
     // Look at the model from above at 45° angle
-    ubo.view = glm::lookAt(
-        glm::vec3(2.0f, 2.0f, 2.0f),    // Eye pos
-        glm::vec3(0.0f, 0.0f, 0.0f),    // Center pos
-        glm::vec3(0.0f, 0.0f, 1.0f)     // Up direction
-    );
+    camera_.SetPosition({ 2.0f, 2.0f, 2.0f });
+    camera_.LookAt({ 0.0f, 0.0f, 0.0f });
+    camera_.UpdateMatrices();
 
-    ubo.proj = glm::perspective(
-        glm::radians(45.0f),    // FoV
-        viewport_->GetWidth() / static_cast<float>(viewport_->GetHeight()),  // Aspect ratio.
-        0.1f,   // Near plane
-        10.0f   // Far plane
-    );
+    ubo.view = camera_.GetView();
+    ubo.proj = camera_.GetProjection();
 
     // GLM was originally designed for OpenGL, where the Y coordinate of the clip coordinates is inverted.
     // -> Have to flip sign on the scaling factor of the Y axis in the projection matrix.
