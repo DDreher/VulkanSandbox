@@ -187,17 +187,15 @@ VkPresentModeKHR VulkanSwapchain::ChoosePresentMode(const std::vector<VkPresentM
 VkExtent2D VulkanSwapchain::ChooseImageExtent(const VkSurfaceCapabilitiesKHR& capabilities, uint32 desired_width, uint32 desired_height)
 {
     // Swap extent is the resolution of the swap chain images in PIXELS! We have to keep that in mind for high DPI screens, e.g. Retina displays.
-    // Usually Vulkan tells us to match the window resolution and sets the extends by itself.
+    // Usually Vulkan tells us to match the window resolution and sets the extents by itself.
     if (capabilities.currentExtent.width != UINT32_MAX)
     {
         return capabilities.currentExtent;
     }
     else // But...
     {
-        // Some window managers allow extends that differ from window resolution, as indicated by setting the width and height in currentExtent to max of uint32_t.
+        // Some window managers allow extends that differ from window resolution, as indicated by setting the width and height in currentExtent to UINT32_MAX.
         // In that case, pick the resolution that best matches the window within the minImageExtent and maxImageExtent bounds.
-
-        // Important: Extent in PIXELS instead of screen coordinates.
         VkExtent2D actual_extent = {
             static_cast<uint32>(desired_width),
             static_cast<uint32>(desired_height)

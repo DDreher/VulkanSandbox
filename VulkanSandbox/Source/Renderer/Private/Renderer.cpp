@@ -17,7 +17,6 @@
 void VulkanRenderer::OnFrameBufferResize(uint32 width, uint32 height)
 {
     was_frame_buffer_resized_ = true;
-    viewport_->Resize(width, height);
 }
 
 void VulkanRenderer::Init(int framebuffer_width, int framebuffer_height)
@@ -27,15 +26,15 @@ void VulkanRenderer::Init(int framebuffer_width, int framebuffer_height)
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    viewport_ = new VulkanViewport(device, vulkan_context.GetSurface(), framebuffer_width, framebuffer_height);
+    swapchain_ = MakeUnique<VulkanSwapchain>(device, vulkan_context.GetSurface(), framebuffer_width, framebuffer_height, VK_NULL_HANDLE);
 
-    camera_ = Camera({ 2.0f, 2.0f, 2.0f }, viewport_->GetWidth() / static_cast<float>(viewport_->GetHeight()), glm::radians(45.0f), 0.1f, 1000.0f);
+    camera_ = Camera({ 2.0f, 2.0f, 2.0f }, framebuffer_width / static_cast<float>(framebuffer_height), glm::radians(45.0f), 0.1f, 1000.0f);
     mesh_ = Mesh({ 0.0f, 0.0f, 0.0f }, 1.0f, "assets/models/viking_room.obj");
 
     // Tell Vulkan about the framebuffer attachments that will be used while rendering
     // e.g. how many color and depth buffers there will be, how many samples to use for each of them,
     // how their contents should be handled throughout the rendering, operations,...
-    render_pass_ = new VulkanRenderPass(viewport_->GetSwapChain());
+    render_pass_ = new VulkanRenderPass(swapchain_.get());
 
     // Specify the types of resources that are going to be accessed by the pipeline
     CreateDescriptorSetLayout();
@@ -167,7 +166,7 @@ void VulkanRenderer::CleanUpSwapChain()
     delete render_pass_;
     render_pass_ = nullptr;
 
-    viewport_->DestroySwapchain();
+    swapchain_.reset();
 
     // Clean up uniform buffer here, as it depends on the number of images in the swap chain.
     for (size_t i = 0; i < uniform_buffers_.size(); i++)
@@ -494,7 +493,7 @@ void VulkanRenderer::CreateFramebuffers()
     CHECK(device != nullptr);
 
     // Create frame buffer for each image view in our swap chain
-    const std::vector<VkImageView> swapchain_image_views = viewport_->GetSwapChain()->GetSwapChainImageViews();
+    const std::vector<VkImageView> swapchain_image_views = swapchain_->GetSwapChainImageViews();
     swapchain_framebuffers.resize(swapchain_image_views.size());
     for (size_t i = 0; i < swapchain_image_views.size(); i++)
     {
@@ -506,7 +505,7 @@ void VulkanRenderer::CreateFramebuffers()
             swapchain_image_views[i] // Color attachment differs for every swap chain image
         };
 
-        swapchain_framebuffers[i] = VulkanFrameBuffer::Create(device, viewport_->GetWidth(), viewport_->GetHeight(),
+        swapchain_framebuffers[i] = VulkanFrameBuffer::Create(device, swapchain_->GetImageExtent().width, swapchain_->GetImageExtent().height,
             attachments, *render_pass_);
     }
 }
@@ -591,7 +590,7 @@ void VulkanRenderer::FillCommandBuffers()
         render_pass_info.renderPass = render_pass_->GetHandle();
         render_pass_info.framebuffer = swapchain_framebuffers[i];
         render_pass_info.renderArea.offset = { 0, 0 };
-        render_pass_info.renderArea.extent = {viewport_->GetWidth(), viewport_->GetHeight()};    // Pixels outside this region will have undefined values.
+        render_pass_info.renderArea.extent = { swapchain_->GetImageExtent().width, swapchain_->GetImageExtent().height };    // Pixels outside this region will have undefined values.
                                                                     // It should match the size of the attachments for best performance.
 
         // define the clear values to use for VK_ATTACHMENT_LOAD_OP_CLEAR
@@ -610,15 +609,15 @@ void VulkanRenderer::FillCommandBuffers()
         VkViewport viewport{};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().width);
-        viewport.height = static_cast<float>(viewport_->GetSwapChain()->GetImageExtent().height);
+        viewport.width = static_cast<float>(swapchain_->GetImageExtent().width);
+        viewport.height = static_cast<float>(swapchain_->GetImageExtent().height);
         viewport.minDepth = 0.0f;   // must be in range [0.0, 1.0]
         viewport.maxDepth = 1.0f;   // must be in range [0.0, 1.0]
         vkCmdSetViewport(cmd_buffer, 0, 1, &viewport);
 
         VkRect2D scissor{};
         scissor.offset = { 0, 0 };
-        scissor.extent = viewport_->GetSwapChain()->GetImageExtent();
+        scissor.extent = swapchain_->GetImageExtent();
         vkCmdSetScissor(cmd_buffer, 0, 1, &scissor);
 
         vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphics_pipeline_);
@@ -870,8 +869,8 @@ void VulkanRenderer::CreateColorResources()
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    VkFormat color_format = viewport_->GetSwapChain()->GetSurfaceFormat().format;
-    vulkan_context.CreateImage(viewport_->GetWidth(), viewport_->GetHeight(), 1, num_msaa_samples_, color_format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_image_, color_image_memory_);
+    VkFormat color_format = swapchain_->GetSurfaceFormat().format;
+    vulkan_context.CreateImage(swapchain_->GetImageExtent().width, swapchain_->GetImageExtent().height, 1, num_msaa_samples_, color_format, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, color_image_, color_image_memory_);
     color_image_view_ = vulkan_context.CreateImageView(color_image_, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
 
@@ -883,7 +882,7 @@ void VulkanRenderer::CreateDepthResources()
     CHECK(device != nullptr);
 
     VkFormat depth_format = device->FindDepthFormat();
-    vulkan_context.CreateImage(viewport_->GetWidth(), viewport_->GetHeight(),    // should have the same resolution as the color attachment
+    vulkan_context.CreateImage(swapchain_->GetImageExtent().width, swapchain_->GetImageExtent().height,    // should have the same resolution as the color attachment
         1,  // No mip mapping
         num_msaa_samples_,
         depth_format,    // A format that's supported by our physical device
@@ -1099,7 +1098,7 @@ void VulkanRenderer::CreateTextureImage()
     // ^^^ VK_IMAGE_LAYOUT_UNDEFINED, cause we don't care about the contents before performing the copy operation
 
     // Then execute the buffer to image copy operation
-    CopyBufferToImage(staging_buffer.GetBufferHandle(), texture_image_, static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height));
+    CopyBufferToImage(staging_buffer.GetBufferHandle(), texture_image_, static_cast<uint32>(tex_width), static_cast<uint32>(tex_height));
 
     // To be able to start sampling from the texture image in the shader, we need one last transition to prepare it for shader access
     //TransitionImageLayout(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, num_mips_);
@@ -1227,7 +1226,7 @@ void VulkanRenderer::CreateUniformBuffers()
 
     // We should not modify the uniforms of a frame that is in-flight!
     // -> We need one uniform buffer per swap chain image.
-    size_t num_swapchain_images = viewport_->GetSwapChain()->GetSwapChainImages().size();
+    size_t num_swapchain_images = swapchain_->GetSwapChainImages().size();
     uniform_buffers_.resize(num_swapchain_images);
     uniform_buffers_memory_.resize(num_swapchain_images);
     for (size_t i = 0; i < num_swapchain_images; i++)
@@ -1252,7 +1251,7 @@ void VulkanRenderer::CreateDescriptorPool()
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    size_t num_swapchain_images = viewport_->GetSwapChain()->GetSwapChainImages().size();
+    size_t num_swapchain_images = swapchain_->GetSwapChainImages().size();
 
     std::array<VkDescriptorPoolSize, 2> pool_sizes{};
     pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1279,7 +1278,7 @@ void VulkanRenderer::CreateDescriptorSets()
     VulkanDevice* device = vulkan_context.GetDevice();
     CHECK(device != nullptr);
 
-    size_t num_swapchain_images = viewport_->GetSwapChain()->GetSwapChainImages().size();
+    size_t num_swapchain_images = swapchain_->GetSwapChainImages().size();
 
     std::vector<VkDescriptorSetLayout> layouts(num_swapchain_images, descriptor_set_layout_);
     VkDescriptorSetAllocateInfo alloc_info{};
@@ -1289,14 +1288,14 @@ void VulkanRenderer::CreateDescriptorSets()
     alloc_info.pSetLayouts = layouts.data();
 
     // Create one descriptor set for each swap chain image.
-    descriptor_sets_.resize(viewport_->GetSwapChain()->GetSwapChainImages().size());
+    descriptor_sets_.resize(swapchain_->GetSwapChainImages().size());
     if (vkAllocateDescriptorSets(device->GetLogicalDeviceHandle(), &alloc_info, descriptor_sets_.data()) != VK_SUCCESS)
     {
         throw std::runtime_error("Failed to allocate descriptor sets!");
     }
 
     // Then populate the descriptors inside of the descriptor sets
-    for (size_t i = 0; i < viewport_->GetSwapChain()->GetSwapChainImages().size(); i++)
+    for (size_t i = 0; i < swapchain_->GetSwapChainImages().size(); i++)
     {
         VkDescriptorBufferInfo buffer_info{};
         buffer_info.buffer = uniform_buffers_[i];
@@ -1404,7 +1403,7 @@ void VulkanRenderer::DrawFrame()
     // => We want to synchronize the queue operations of draw commands and presentation, which makes semaphores the best fit.
 
     uint32_t image_index;   // refers to the VkImage idx in our swap_chain_images_ array
-    VkResult result = vkAcquireNextImageKHR(device->GetLogicalDeviceHandle(), viewport_->GetSwapChain()->GetHandle(),
+    VkResult result = vkAcquireNextImageKHR(device->GetLogicalDeviceHandle(), swapchain_->GetHandle(),
         UINT64_MAX /*disable time out*/, image_available_semaphores_[current_frame_], VK_NULL_HANDLE, &image_index);
 
     // Check for window resizes, so we can recreate the swap chain.
@@ -1478,7 +1477,7 @@ void VulkanRenderer::DrawFrame()
     present_info.pWaitSemaphores = signal_semaphores;
 
     // Specify the swap chains to present images to and the index of the image for each swap chain (will almost always be a single one)
-    VkSwapchainKHR swap_chains[] = { viewport_->GetSwapChain()->GetHandle() };
+    VkSwapchainKHR swap_chains[] = { swapchain_->GetHandle() };
     present_info.swapchainCount = 1;
     present_info.pSwapchains = swap_chains;
     present_info.pImageIndices = &image_index;
@@ -1517,7 +1516,7 @@ void VulkanRenderer::CreateSyncObjects()
     image_available_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
     render_finished_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
     inflight_frame_fences_.resize(MAX_FRAMES_IN_FLIGHT);
-    inflight_images_.resize(viewport_->GetSwapChain()->GetSwapChainImages().size(), VK_NULL_HANDLE);
+    inflight_images_.resize(swapchain_->GetSwapChainImages().size(), VK_NULL_HANDLE);
 
     VkSemaphoreCreateInfo semaphore_info{};
     semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;

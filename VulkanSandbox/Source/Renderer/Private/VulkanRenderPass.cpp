@@ -16,19 +16,22 @@ VulkanRenderPass::VulkanRenderPass(VulkanSwapchain* swapchain)
     VkAttachmentDescription color_attachment{};
     color_attachment.format = swapchain->GetSurfaceFormat().format; // should match the format of the swap chain images
     color_attachment.samples = num_msaa_samples;   // No multisampling for now -> Only 1 sample.
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;  // What to do with the data in the attachment before rendering
-                                                            //VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
-                                                            //VK_ATTACHMENT_LOAD_OP_CLEAR : Clear the values to a constant at the start
-                                                            //VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them
-                                                            // => We clear the screen to black before drawing a new frame.
 
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;    // What to do with the data in the attachment after rendering
-                                                                // VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
-                                                                // VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering operation
-                                                                // => We're interested in seeing the rendered polygons on the screen, so we're going with the store operation here.
+    // LOAD_OPs define what to do with data in attachment BEFORE rendering.
+    // VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
+    // VK_ATTACHMENT_LOAD_OP_CLEAR : Clear the values to a constant at the start
+    // VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them
+    // => e.g. We clear the screen to black before drawing a new frame.
 
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   // Our application won't do anything with the stencil buffer
-                                                                        // -> the results of loading and storing are irrelevant
+    // STORE_OPs define what to do with data in attachment AFTER rendering
+    // VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
+    // VK_ATTACHMENT_STORE_OP_DONT_CARE : Contents of the framebuffer will be undefined after the rendering operation
+    // => e.g. We're interested in seeing the rendered polygons on the screen, so we're going with the OP_STORE operation.
+
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;   // Currently we don't do anything with the stencil buffer
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // Specifies which layout the image will have before the render pass begins.
@@ -38,8 +41,8 @@ VulkanRenderPass::VulkanRenderPass(VulkanSwapchain* swapchain)
                                                                 // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : Images to be presented in the swap chain
                                                                 // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : Images to be used as destination for a memory copy operation
 
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // specifies the layout to automatically transition to when the render pass finishes
-                                                                             // multisampled images cannot be presented directly. We first need to resolve them to a regular image.
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // Automatically transition to this layout when the render pass finishes
+                                                                             // multisampled images can't be presented directly - first need to resolve them to an image.
                                                                              // (does not apply to depth buffer, since it won't be presented)
 
     // MSAA: Have to add a new attachment so we can resolve the multisampled color image to a regular image attachment with only a single sample
@@ -57,7 +60,7 @@ VulkanRenderPass::VulkanRenderPass(VulkanSwapchain* swapchain)
     depth_attachment.format = vulkan_context.GetDevice()->FindDepthFormat();
     depth_attachment.samples = num_msaa_samples;
     depth_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;    // depth data will not be used after drawing has finished (may allow hardware optimizations)
+    depth_attachment.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;    // depth data will not be used after drawing has finished
     depth_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     depth_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;     // we don't care about the previous depth contents
@@ -81,7 +84,7 @@ VulkanRenderPass::VulkanRenderPass(VulkanSwapchain* swapchain)
     color_attachment_resolve_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;    // We have to be explicit that this is a graphics subpass. Could also be a compute subpass in the future!
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;    // We have to be explicit that this is a graphics subpass. Could also be a compute subpass!
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_ref;
     subpass.pDepthStencilAttachment = &depth_attachment_ref;    //  a subpass can only use a single depth (+stencil) attachment

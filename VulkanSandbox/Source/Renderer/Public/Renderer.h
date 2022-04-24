@@ -6,7 +6,6 @@
 #include "VulkanBuffer.h"
 #include "VulkanCommandBuffer.h"
 #include "VulkanRenderPass.h"
-#include "VulkanViewport.h"
 
 
 struct SDL_Window;
@@ -177,6 +176,6 @@ private:
     uint32 current_frame_ = 0;
     bool was_frame_buffer_resized_ = false;
 
-    VulkanViewport* viewport_ = nullptr;
+    UniquePtr<VulkanSwapchain> swapchain_;
     VulkanRenderPass* render_pass_ = nullptr;
 };
