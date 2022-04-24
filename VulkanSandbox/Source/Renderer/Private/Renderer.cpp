@@ -10,6 +10,7 @@
 #include "VulkanDevice.h"
 #include "VulkanFrameBuffer.h"
 #include "VulkanMacros.h"
+#include "VulkanMemory.h"
 #include "VulkanQueue.h"
 #include "VulkanViewport.h"
 
@@ -109,8 +110,8 @@ void VulkanRenderer::Cleanup()
     vkDestroyDescriptorSetLayout(vulkan_context.GetDevice()->GetLogicalDeviceHandle(), descriptor_set_layout_, nullptr);
 
     // Destroy buffers and corresponding memory
-    index_buffer_.Destroy();
-    vertex_buffer_.Destroy();
+    index_buffer_.reset();
+    vertex_buffer_.reset();
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -624,13 +625,13 @@ void VulkanRenderer::FillCommandBuffers()
 
         // We've now told Vulkan which operations to execute in the graphics pipeline and which attachment to use in the fragment shader,
         // so all that remains is binding the vertex buffer and drawing the triangle
-        VkBuffer vertex_buffers[] = { vertex_buffer_.GetBufferHandle() };
+        VkBuffer vertex_buffers[] = { vertex_buffer_->GetBufferHandle() };
         VkDeviceSize offsets[] = { 0 };
 
         // Bind vertex buffer to bindings
         vkCmdBindVertexBuffers(cmd_buffer, 0 /*offset*/, 1 /*num bindings*/,
             vertex_buffers, offsets /*byte offsets to start reading the data from*/);
-        vkCmdBindIndexBuffer(cmd_buffer, index_buffer_.GetBufferHandle(), 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
+        vkCmdBindIndexBuffer(cmd_buffer, index_buffer_->GetBufferHandle(), 0 /*offset*/, VK_INDEX_TYPE_UINT32);   // We can only bind one index buffer!
                                                                                                         // Can't use different indices for each vertex attribute (e.g. for normals)
                                                                                                         // Also: If we have uint32 indices, we have to adjust the type!
 
@@ -682,7 +683,7 @@ void VulkanRenderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, V
     VkMemoryAllocateInfo alloc_info{};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = mem_requirements.size;
-    alloc_info.memoryTypeIndex = device->FindMemoryType(mem_requirements.memoryTypeBits, properties);
+    alloc_info.memoryTypeIndex = VulkanMemory::FindMemoryType(device, mem_requirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(device->GetLogicalDeviceHandle(), &alloc_info, nullptr, &out_buffer_memory) != VK_SUCCESS)
     {
@@ -1071,7 +1072,7 @@ void VulkanRenderer::CreateTextureImage()
     // Add 1 so that we have at least one mip level
 
     // First copy to a staging buffer
-    VulkanBuffer staging_buffer = VulkanBuffer::Create(device, tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VulkanBuffer staging_buffer = VulkanBuffer(device, tex_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     memcpy(staging_buffer.Map(tex_size), tex_data, static_cast<size_t>(tex_size));
     staging_buffer.Unmap();
@@ -1105,8 +1106,6 @@ void VulkanRenderer::CreateTextureImage()
 
     // This final transition is already handled in GenerateMips :)
     GenerateMipmaps(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, tex_width, tex_height, num_mips_);
-
-    staging_buffer.Destroy();
 }
 
 void VulkanRenderer::CreateTextureImageView()
@@ -1176,7 +1175,7 @@ void VulkanRenderer::CreateVertexBuffer()
     // Device local memory is optimal for reading speed on the GPU, but not accessible from the CPU!
     // To copy to device local memory we therefore can't use vkMapMemory.
     // Instead we have to specify the VK_BUFFER_USAGE_TRANSFER_SRC_BIT or VK_BUFFER_USAGE_TRANSFER_DST_BIT properties.
-    VulkanBuffer staging_buffer = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VulkanBuffer staging_buffer = VulkanBuffer(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     // ^^^ Properties
     // VK_BUFFER_USAGE_TRANSFER_SRC_BIT -> Buffer can be used as source in a memory transfer operation.
@@ -1192,15 +1191,12 @@ void VulkanRenderer::CreateVertexBuffer()
     memcpy(staging_buffer.Map(buffer_size), mesh_.GetMeshData().vertices_.data(), (size_t)buffer_size);    // No flush required as we set VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
     staging_buffer.Unmap();
 
-    vertex_buffer_ = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+    vertex_buffer_ = MakeShared<VulkanBuffer>(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     // ^^^
     // VK_BUFFER_USAGE_TRANSFER_DST_BIT -> Buffer can be used as destination in a memory transfer operation.
 
-    CopyBuffer(staging_buffer.GetBufferHandle(), vertex_buffer_.GetBufferHandle(), buffer_size);
-
-    // Once the copy command is done we can clean up the staging buffer
-    staging_buffer.Destroy();
+    CopyBuffer(staging_buffer.GetBufferHandle(), vertex_buffer_->GetBufferHandle(), buffer_size);
 }
 
 void VulkanRenderer::CreateIndexBuffer()
@@ -1215,16 +1211,14 @@ void VulkanRenderer::CreateIndexBuffer()
 
     VkDeviceSize buffer_size = sizeof(mesh_.GetMeshData().indices_[0]) * mesh_.GetMeshData().indices_.size();
 
-    VulkanBuffer staging_buffer = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VulkanBuffer staging_buffer = VulkanBuffer(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     memcpy(staging_buffer.Map(buffer_size), mesh_.GetMeshData().indices_.data(), (size_t)buffer_size);
     staging_buffer.Unmap();
 
-    index_buffer_ = VulkanBuffer::Create(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+    index_buffer_ = MakeShared<VulkanBuffer>(device, buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    CopyBuffer(staging_buffer.GetBufferHandle(), index_buffer_.GetBufferHandle(), buffer_size);
-
-    staging_buffer.Destroy();
+    CopyBuffer(staging_buffer.GetBufferHandle(), index_buffer_->GetBufferHandle(), buffer_size);
 }
 
 void VulkanRenderer::CreateUniformBuffers()

@@ -2,6 +2,7 @@
 
 #include "VulkanDevice.h"
 #include "VulkanMacros.h"
+#include "VulkanMemory.h"
 
 VulkanImage::VulkanImage(VulkanDevice* device, uint32 width, uint32 height, uint32 num_layers, uint32 num_mips, VkFormat format, VkImageLayout layout,
     VkSampleCountFlagBits num_samples, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImageViewType view_type, VkImageAspectFlags view_aspect_flags)
@@ -77,7 +78,7 @@ VkDeviceMemory VulkanImage::AllocateImageMemory(VulkanDevice* device, VkImage im
 
     VkMemoryAllocateInfo alloc_info = { VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO };
     alloc_info.allocationSize = mem_requirements.size;
-    alloc_info.memoryTypeIndex = device->FindMemoryType(mem_requirements.memoryTypeBits, properties);
+    alloc_info.memoryTypeIndex = VulkanMemory::FindMemoryType(device, mem_requirements.memoryTypeBits, properties);
 
     VkDeviceMemory mem_handle;
     VERIFY_VK_RESULT(vkAllocateMemory(device->GetLogicalDeviceHandle(), &alloc_info, nullptr, &mem_handle));

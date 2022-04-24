@@ -5,6 +5,7 @@
 #include "SDL_video.h"
 
 #include "VulkanMacros.h"
+#include "VulkanMemory.h"
 
 VulkanContext::VulkanContext()
 {
@@ -120,7 +121,7 @@ void VulkanContext::CreateImage(uint32 width, uint32 height, uint32 num_mips, Vk
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = mem_requirements.size;
-    allocInfo.memoryTypeIndex = GetDevice()->FindMemoryType(mem_requirements.memoryTypeBits, properties);
+    allocInfo.memoryTypeIndex = VulkanMemory::FindMemoryType(GetDevice(), mem_requirements.memoryTypeBits, properties);
 
     if (vkAllocateMemory(device_->GetLogicalDeviceHandle(), &allocInfo, nullptr, &image_memory) != VK_SUCCESS)
     {

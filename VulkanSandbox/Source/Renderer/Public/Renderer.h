@@ -141,8 +141,8 @@ private:
     std::vector<VkFence> inflight_frame_fences_;
     std::vector<VkFence> inflight_images_;
 
-    VulkanBuffer vertex_buffer_;
-    VulkanBuffer index_buffer_;
+    SharedPtr<VulkanBuffer> vertex_buffer_;
+    SharedPtr<VulkanBuffer> index_buffer_;
 
     std::vector<VkBuffer> uniform_buffers_;
     std::vector<VkDeviceMemory> uniform_buffers_memory_;    // Array, because we need one uniform buffer per swap chain image!
