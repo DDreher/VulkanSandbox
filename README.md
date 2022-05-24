@@ -23,4 +23,4 @@ The code is written in C++ and heavily inspired by the [Vulkan Tutorial](https:/
 ## Acknowledgments
 
 * [Vulkan Tutorial](https://vulkan-tutorial.com/)
-* ["Viking room"](https://sketchfab.com/3d-models/viking-room-a49f1b8e4f5c4ecf9e1fe7d81915ad38) model by nigelgoh (CC BY 4.0)
+* ["Viking room"](https://sketchfab.com/3d-models/viking-room-a49f1b8e4f5c4ecf9e1fe7d81915ad38) model by nigelgoh (CC BY 4.0, no modifications)
