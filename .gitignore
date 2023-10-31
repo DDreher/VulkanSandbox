@@ -131,4 +131,6 @@ obj/
 Saved/
 
 # Exception for necessary binaries
+!/**/*.lib
+!/**/*.dll
 !premake5.exe
